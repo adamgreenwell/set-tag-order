@@ -1,9 +1,13 @@
-(function(wp) {
-    const { registerPlugin } = wp.plugins;
-    const { PluginDocumentSettingPanel } = wp.editor;
-    const { useSelect, useDispatch } = wp.data;
-    const { useState, useEffect, createElement: h } = wp.element;
-    const { Button } = wp.components;
+/*
+* File Name: assets/js/set-tag-order.js
+*/
+
+(function (wp) {
+    const {registerPlugin} = wp.plugins;
+    const {PluginDocumentSettingPanel} = wp.editor;
+    const {useSelect, useDispatch} = wp.data;
+    const {useState, useEffect, createElement: h} = wp.element;
+    const {Button} = wp.components;
 
     const TagOrderPanel = () => {
         const [tagOrder, setTagOrder] = useState([]);
@@ -23,7 +27,7 @@
             select('core/editor').getEditedPostAttribute('tags')
         );
 
-        const { editPost } = useDispatch('core/editor');
+        const {editPost} = useDispatch('core/editor');
 
         // Initialize tagOrder with current post tags if no order is saved
         useEffect(() => {
@@ -33,7 +37,7 @@
 
                 if (!savedOrder) {
                     setTagOrder(postTags);
-                    editPost({ meta: { _tag_order: postTags.join(',') } });
+                    editPost({meta: {_tag_order: postTags.join(',')}});
                 } else {
                     setTagOrder(savedOrder);
                 }
@@ -63,7 +67,7 @@
                 [newOrder[newIndex], newOrder[currentIndex]];
 
             setTagOrder(newOrder);
-            editPost({ meta: { _tag_order: newOrder.join(',') } });
+            editPost({meta: {_tag_order: newOrder.join(',')}});
         };
 
         return h('div', null,
@@ -77,7 +81,7 @@
                         }
                     },
                     h('span', null, tag.name),
-                    h('div', { style: { marginLeft: 'auto' } },
+                    h('div', {style: {marginLeft: 'auto'}},
                         index > 0 && h(Button, {
                             isSmall: true,
                             onClick: () => moveTag(tag.id, 'up')
