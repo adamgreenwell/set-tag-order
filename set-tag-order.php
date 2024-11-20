@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) exit;
 require_once plugin_dir_path(__FILE__) . 'update/github-updater.php';
 
 $updater = new GitHub_Updater(__FILE__);
-$updater->set_github_info('adamgreenwell', 'omeda-webhook-forms');
+$updater->set_github_info('adamgreenwell', 'set-tag-order');
 
 // Register meta field for tag order for all post types that support tags
 add_action('init', function() {
