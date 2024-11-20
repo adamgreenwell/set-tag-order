@@ -2,11 +2,11 @@
 
 Contributors: Adam Greenwell
 
-Stable tag: 1.0.0
-Tested up to: 6.7
-Requires at least: 5.2
-Requires PHP: 7.4
-Requires at least: 7.4
+Stable tag: 1.0.0 \
+Tested up to: 6.7 \
+Requires at least: 5.2 \
+Requires PHP: 7.4 \
+Requires at least: 7.4 \
 License: GPLv2 or later
 
 This plugin adds a Tag Order panel to the WordPress Block Editor that allows arranging tags in a specific order. Tags are
