@@ -1,5 +1,9 @@
 <?php
 
+/*
+ * File Name: update/github-updater.php
+ */
+
 class GitHub_Updater
 {
 	private $slug;
