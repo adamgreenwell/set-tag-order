@@ -1,8 +1,8 @@
 <?php
 
 /*
- * File Name: update/github-updater.php
- */
+* File Name: update/github-updater.php
+*/
 
 class GitHub_Updater
 {

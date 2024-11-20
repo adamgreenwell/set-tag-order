@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once plugin_dir_path( __FILE__ ) . 'inc/admin/settings.php';
 require_once plugin_dir_path( __FILE__ ) . 'update/github-updater.php';
 
 $updater = new GitHub_Updater( __FILE__ );
@@ -115,20 +116,31 @@ function get_ordered_post_tags( $post_id = null ) {
 	return order_tags( $tags, $post_id );
 }
 
+// Update the existing the_ordered_post_tags() function
 function the_ordered_post_tags() {
 	$tags = get_ordered_post_tags();
 	if ( ! $tags ) {
 		return;
 	}
 
+	$separator = get_option( 'tag_order_separator', '' );
+	$class     = get_option( 'tag_order_class', 'tag' );
+
 	$html = '<div class="post-tags">';
-	foreach ( $tags as $tag ) {
+
+	foreach ( $tags as $index => $tag ) {
+		if ( $index > 0 && ! empty( $separator ) ) {
+			$html .= '<span class="tag-separator">' . esc_html( $separator ) . '</span>';
+		}
+
 		$html .= sprintf(
-			'<a href="%s" class="tag">%s</a>',
+			'<a href="%s" class="%s">%s</a>',
 			get_tag_link( $tag->term_id ),
+			esc_attr( $class ),
 			esc_html( $tag->name )
 		);
 	}
+
 	$html .= '</div>';
 
 	echo $html;
