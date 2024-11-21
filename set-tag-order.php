@@ -2,7 +2,7 @@
 /*
 * Plugin Name: Set Tag Order
 * Description: Allows setting custom order for post tags in the block editor
-* Version: 1.0.1
+* Version: 1.0.2
 * Author: Adam Greenwell
 *
 * File Name: set-tag-order.php
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once plugin_dir_path( __FILE__ ) . 'inc/admin/settings.php';
 require_once plugin_dir_path( __FILE__ ) . 'update/github-updater.php';
 
-$updater = new GitHub_Updater( __FILE__ );
+$updater = new Set_Tag_Order_GitHub_Updater( __FILE__ );
 $updater->set_github_info( 'adamgreenwell', 'set-tag-order' );
 
 // Register meta field for tag order for all post types that support tags
@@ -165,7 +165,7 @@ add_action( 'enqueue_block_editor_assets', function () {
 		'tag-order-script',
 		plugins_url( '/assets/js/set-tag-order.js', __FILE__ ),
 		[ 'wp-plugins', 'wp-editor', 'wp-element', 'wp-components', 'wp-data' ],
-		'1.0.0',
+		'1.0.2',
 		true
 	);
 } );
