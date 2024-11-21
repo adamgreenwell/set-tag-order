@@ -27,21 +27,36 @@
             select('core/editor').getEditedPostAttribute('tags')
         );
 
+        const meta = useSelect(select =>
+            select('core/editor').getEditedPostAttribute('meta')
+        );
+
         const {editPost} = useDispatch('core/editor');
 
-        // Initialize tagOrder with current post tags if no order is saved
+        // Update tag order whenever postTags changes
         useEffect(() => {
-            if (postTags && postTags.length > 0) {
-                const meta = wp.data.select('core/editor').getEditedPostAttribute('meta') || {};
-                const savedOrder = meta._tag_order ? meta._tag_order.split(',').map(Number) : null;
-
-                if (!savedOrder) {
-                    setTagOrder(postTags);
-                    editPost({meta: {_tag_order: postTags.join(',')}});
-                } else {
-                    setTagOrder(savedOrder);
-                }
+            if (!postTags || !postTags.length) {
+                // Clear the order if there are no tags
+                setTagOrder([]);
+                editPost({meta: {...meta, _tag_order: ''}});
+                return;
             }
+
+            const savedOrder = meta?._tag_order ? meta._tag_order.split(',').map(Number) : [];
+
+            // Filter out any saved order IDs that are no longer in postTags
+            const validSavedOrder = savedOrder.filter(id => postTags.includes(id));
+
+            // Add any new tags that aren't in the saved order
+            const newOrder = [...validSavedOrder];
+            postTags.forEach(tagId => {
+                if (!newOrder.includes(tagId)) {
+                    newOrder.push(tagId);
+                }
+            });
+
+            setTagOrder(newOrder);
+            editPost({meta: {...meta, _tag_order: newOrder.join(',')}});
         }, [postTags]);
 
         if (!tags || !postTags) return null;
@@ -63,36 +78,45 @@
             const newOrder = [...tagOrder];
             const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
 
-            [newOrder[currentIndex], newOrder[newIndex]] =
-                [newOrder[newIndex], newOrder[currentIndex]];
+            if (newIndex >= 0 && newIndex < newOrder.length) {
+                [newOrder[currentIndex], newOrder[newIndex]] =
+                    [newOrder[newIndex], newOrder[currentIndex]];
 
-            setTagOrder(newOrder);
-            editPost({meta: {_tag_order: newOrder.join(',')}});
+                setTagOrder(newOrder);
+                editPost({meta: {...meta, _tag_order: newOrder.join(',')}});
+            }
         };
 
         return h('div', null,
-            orderedTags.map((tag, index) =>
-                h('div', {
-                        key: tag.id,
-                        style: {
-                            display: 'flex',
-                            alignItems: 'center',
-                            marginBottom: '8px'
-                        }
-                    },
-                    h('span', null, tag.name),
-                    h('div', {style: {marginLeft: 'auto'}},
-                        index > 0 && h(Button, {
-                            isSmall: true,
-                            onClick: () => moveTag(tag.id, 'up')
-                        }, '↑'),
-                        index < orderedTags.length - 1 && h(Button, {
-                            isSmall: true,
-                            onClick: () => moveTag(tag.id, 'down')
-                        }, '↓')
+            orderedTags.length === 0 ?
+                h('p', null, 'Add tags to customize their display order.') :
+                orderedTags.map((tag, index) =>
+                    h('div', {
+                            key: tag.id,
+                            style: {
+                                display: 'flex',
+                                alignItems: 'center',
+                                marginBottom: '8px',
+                                padding: '8px',
+                                backgroundColor: '#f0f0f0',
+                                borderRadius: '4px'
+                            }
+                        },
+                        h('span', null, tag.name),
+                        h('div', {style: {marginLeft: 'auto'}},
+                            index > 0 && h(Button, {
+                                isSmall: true,
+                                onClick: () => moveTag(tag.id, 'up'),
+                                icon: 'arrow-up-alt2'
+                            }),
+                            index < orderedTags.length - 1 && h(Button, {
+                                isSmall: true,
+                                onClick: () => moveTag(tag.id, 'down'),
+                                icon: 'arrow-down-alt2'
+                            })
+                        )
                     )
                 )
-            )
         );
     };
 
