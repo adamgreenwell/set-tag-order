@@ -4,7 +4,7 @@
 * File Name: update/github-updater.php
 */
 
-class GitHub_Updater
+class Set_Tag_Order_GitHub_Updater
 {
 	private $slug;
 	private $plugin_data;

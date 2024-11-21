@@ -27,6 +27,11 @@ Documentation pending
 
 == Changelog ==
 
+= 1.0.2 =
+*Release Date - 21 November 2024*
+
+* Refactor GitHub Updater class to prevent conflict with other plugins
+
 = 1.0.1 =
 *Release Date - 21 November 2024*
 
