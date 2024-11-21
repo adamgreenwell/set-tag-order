@@ -2,7 +2,7 @@
 
 Contributors: Adam Greenwell
 
-Stable tag: 1.0.0 \
+Stable tag: 1.0.1 \
 Tested up to: 6.7 \
 Requires at least: 5.2 \
 Requires PHP: 7.4 \
@@ -12,7 +12,6 @@ License: GPLv2 or later
 This plugin adds a Tag Order panel to the WordPress Block Editor that allows arranging tags in a specific order. Tags are
 displayed in the set order using the built-in WordPress "the_tags()" function or can be called using
 "the_ordered_post_tags()".
-
 
 ## Installation ##
 
@@ -26,6 +25,12 @@ displayed in the set order using the built-in WordPress "the_tags()" function or
 Documentation pending
 
 ## Changelog ##
+
+### 1.0.1 ###
+*Release Date - 21 November 2024*
+
+* Update block editor panel presentation with more clear UI elements
+* Better initialization before a tag order is set
 
 ### 1.0.0 ###
 *Release Date - 20 November 2024*

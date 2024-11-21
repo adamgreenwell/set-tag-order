@@ -2,7 +2,7 @@
 /*
 * Plugin Name: Set Tag Order
 * Description: Allows setting custom order for post tags in the block editor
-* Version: 1.0.0
+* Version: 1.0.1
 * Author: Adam Greenwell
 *
 * File Name: set-tag-order.php
@@ -20,7 +20,7 @@ $updater->set_github_info( 'adamgreenwell', 'set-tag-order' );
 
 // Register meta field for tag order for all post types that support tags
 add_action( 'init', function () {
-	$post_types = get_post_types_by_support( 'post-tags' );
+	$post_types = get_post_types_with_tags();
 
 	foreach ( $post_types as $post_type ) {
 		register_post_meta( $post_type, '_tag_order', [
@@ -29,7 +29,8 @@ add_action( 'init', function () {
 			'type'          => 'string',
 			'auth_callback' => function () {
 				return current_user_can( 'edit_posts' );
-			}
+			},
+			'default'       => ''
 		] );
 	}
 } );
@@ -49,12 +50,17 @@ function get_post_types_with_tags() {
 }
 
 // Helper function to order tags
+// Add debug logging to verify order_tags function is working
 function order_tags( $tags, $post_id ) {
 	if ( ! $tags || ! $post_id ) {
 		return $tags;
 	}
 
 	$tag_order = get_post_meta( $post_id, '_tag_order', true );
+
+	// Debug log
+	error_log( 'Tag Order for post ' . $post_id . ': ' . $tag_order );
+
 	if ( ! $tag_order ) {
 		return $tags;
 	}
@@ -81,6 +87,13 @@ function order_tags( $tags, $post_id ) {
 
 	return $ordered_tags;
 }
+
+// Add debug action to verify meta is being saved
+add_action( 'updated_post_meta', function ( $meta_id, $post_id, $meta_key, $meta_value ) {
+	if ( $meta_key === '_tag_order' ) {
+		error_log( 'Updated tag order for post ' . $post_id . ': ' . $meta_value );
+	}
+}, 10, 4 );
 
 // Filter to modify tag output - this affects get_the_tags() and the_tags()
 add_filter( 'get_the_terms', function ( $terms, $post_id, $taxonomy ) {
