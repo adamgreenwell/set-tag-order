@@ -2,7 +2,7 @@
 /*
 * Plugin Name: Set Tag Order
 * Description: Allows setting custom order for post tags in the block editor
-* Version: 1.0.0
+* Version: 1.0.1
 * Author: Adam Greenwell
 *
 * File Name: set-tag-order.php
