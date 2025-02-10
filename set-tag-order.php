@@ -88,6 +88,269 @@ function order_tags( $tags, $post_id ) {
 	return $ordered_tags;
 }
 
+// Enqueue jQuery UI for Classic Editor
+add_action('admin_enqueue_scripts', function($hook) {
+	if (!in_array($hook, ['post.php', 'post-new.php'])) {
+		return;
+	}
+
+	// Check if Block Editor is active
+	if (use_block_editor_for_post_type(get_post_type())) {
+		return;
+	}
+
+	wp_enqueue_script('jquery-ui-sortable');
+});
+
+// Add meta box for Classic Editor
+add_action('add_meta_boxes', function() {
+	$post_types = get_post_types_with_tags();
+
+	foreach ($post_types as $post_type) {
+		add_meta_box(
+			'tag-order-meta-box',
+			'Tags',
+			'render_custom_tag_box',
+			$post_type,
+			'side',
+			'core'
+		);
+	}
+});
+
+// Remove default tags meta box from Classic Editor
+add_action('admin_menu', function() {
+	$post_types = get_post_types_with_tags();
+	foreach ($post_types as $post_type) {
+		remove_meta_box('tagsdiv-post_tag', $post_type, 'side');
+	}
+});
+
+function render_custom_tag_box($post) {
+	$all_tags = get_tags(['hide_empty' => false]);
+	$post_tags = get_the_tags($post->ID) ?: [];
+	$tag_order = get_post_meta($post->ID, '_tag_order', true);
+	$ordered_ids = $tag_order ? explode(',', $tag_order) : [];
+
+	wp_nonce_field('tag_order_meta_box', 'tag_order_meta_box_nonce');
+	?>
+	<div class="tagsdiv" id="custom-tags">
+		<div class="jaxtag">
+			<input type="text"
+			       id="new-tag-input"
+			       class="newtag form-input-tip"
+			       size="16"
+			       autocomplete="off"
+			       value="" />
+			<input type="button"
+			       class="button tagadd"
+			       value="Add" />
+		</div>
+
+		<div class="tagchecklist">
+			<ul id="sortable-tags" class="tag-list">
+				<?php foreach ($post_tags as $tag): ?>
+					<li data-tag-id="<?php echo esc_attr($tag->term_id); ?>">
+						<?php echo esc_html($tag->name); ?>
+						<button type="button"
+						        class="ntdelbutton"
+						        data-tag-id="<?php echo esc_attr($tag->term_id); ?>">
+							<span class="remove-tag-icon" aria-hidden="true"></span>
+						</button>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+		</div>
+
+		<input type="hidden"
+		       name="tag_order"
+		       id="tag-order-input"
+		       value="<?php echo esc_attr($tag_order); ?>" />
+		<input type="hidden"
+		       name="post_tags"
+		       id="post-tags-input"
+		       value="<?php echo esc_attr(implode(',', wp_list_pluck($post_tags, 'term_id'))); ?>" />
+
+		<div class="ajaxtag hide-if-no-js">
+			<p><?php _e('Start typing to search existing tags, or add new ones.'); ?></p>
+		</div>
+	</div>
+
+	<style>
+        .tag-list {
+            margin: 0;
+            padding: 0;
+        }
+        .tag-list li {
+            padding: 8px;
+            margin: 4px 0;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            cursor: move;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .tag-list li:hover {
+            background: #e5e5e5;
+        }
+        .ntdelbutton {
+            border: none;
+            background: none;
+            color: #a00;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        .ntdelbutton:hover {
+            color: #dc3232;
+        }
+        .remove-tag-icon::before {
+            content: "×";
+        }
+        #new-tag-input {
+            width: 180px;
+            max-width: 100%;
+        }
+	</style>
+
+	<script>
+        jQuery(document).ready(function($) {
+            var tagInput = $('#new-tag-input');
+            var existingTags = <?php echo json_encode(array_map(function($tag) {
+				return ['id' => $tag->term_id, 'text' => $tag->name];
+			}, $all_tags)); ?>;
+
+            // Initialize sortable
+            $('#sortable-tags').sortable({
+                update: function(event, ui) {
+                    updateTagOrder();
+                }
+            });
+
+            // Initialize tag autocomplete
+            tagInput.autocomplete({
+                source: existingTags.map(tag => tag.text),
+                minLength: 2,
+                select: function(event, ui) {
+                    event.preventDefault();
+                    var selectedTag = existingTags.find(tag => tag.text === ui.item.value);
+                    if (selectedTag) {
+                        addTag(selectedTag.id, selectedTag.text);
+                    }
+                    tagInput.val('');
+                }
+            });
+
+            // Add tag button click
+            $('.tagadd').click(function() {
+                var tagName = tagInput.val();
+                if (!tagName) return;
+
+                // Check if tag exists
+                var existingTag = existingTags.find(tag =>
+                    tag.text.toLowerCase() === tagName.toLowerCase()
+                );
+
+                if (existingTag) {
+                    addTag(existingTag.id, existingTag.text);
+                    tagInput.val('');
+                } else {
+                    // Create new tag
+                    wp.ajax.post('add-tag', {
+                        tag_name: tagName
+                    }).done(function(response) {
+                        addTag(response.term_id, tagName);
+                        existingTags.push({
+                            id: response.term_id,
+                            text: tagName
+                        });
+                        tagInput.val('');
+                    });
+                }
+            });
+
+            // Remove tag button click
+            $(document).on('click', '.ntdelbutton', function() {
+                $(this).parent().remove();
+                updateTagOrder();
+            });
+
+            function addTag(id, name) {
+                // Check if tag already exists
+                if ($(`#sortable-tags li[data-tag-id="${id}"]`).length) {
+                    return;
+                }
+
+                $('#sortable-tags').append(`
+                <li data-tag-id="${id}">
+                    ${name}
+                    <button type="button" class="ntdelbutton" data-tag-id="${id}">
+                        <span class="remove-tag-icon" aria-hidden="true"></span>
+                    </button>
+                </li>
+            `);
+                updateTagOrder();
+            }
+
+            function updateTagOrder() {
+                var order = $('#sortable-tags').sortable('toArray', {
+                    attribute: 'data-tag-id'
+                });
+                $('#tag-order-input').val(order.join(','));
+                $('#post-tags-input').val(order.join(','));
+            }
+        });
+	</script>
+	<?php
+}
+
+// Save meta box data
+add_action('save_post', function($post_id) {
+	if (!isset($_POST['tag_order_meta_box_nonce']) ||
+	    !wp_verify_nonce($_POST['tag_order_meta_box_nonce'], 'tag_order_meta_box')) {
+		return;
+	}
+
+	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+		return;
+	}
+
+	if (!current_user_can('edit_post', $post_id)) {
+		return;
+	}
+
+	if (isset($_POST['post_tags'])) {
+		$tag_ids = array_filter(
+			explode(',', sanitize_text_field($_POST['post_tags']))
+		);
+		wp_set_post_tags($post_id, $tag_ids, false);
+	}
+
+	if (isset($_POST['tag_order'])) {
+		update_post_meta(
+			$post_id,
+			'_tag_order',
+			sanitize_text_field($_POST['tag_order'])
+		);
+	}
+});
+
+// Add AJAX handler for creating new tags
+add_action('wp_ajax_add-tag', function() {
+	$tag_name = sanitize_text_field($_POST['tag_name']);
+	$tag = wp_insert_term($tag_name, 'post_tag');
+
+	if (is_wp_error($tag)) {
+		wp_send_json_error($tag->get_error_message());
+	} else {
+		wp_send_json_success([
+			'term_id' => $tag['term_id'],
+			'name' => $tag_name
+		]);
+	}
+});
+
 // Add debug action to verify meta is being saved
 add_action( 'updated_post_meta', function ( $meta_id, $post_id, $meta_key, $meta_value ) {
 	if ( $meta_key === '_tag_order' ) {
@@ -159,13 +422,25 @@ function the_ordered_post_tags() {
 	echo $html;
 }
 
-// Enqueue block editor JavaScript
-add_action( 'enqueue_block_editor_assets', function () {
-	wp_enqueue_script(
-		'tag-order-script',
-		plugins_url( '/assets/js/set-tag-order.js', __FILE__ ),
-		[ 'wp-plugins', 'wp-editor', 'wp-element', 'wp-components', 'wp-data' ],
-		'1.0.2',
-		true
-	);
-} );
+// Enqueue block editor JavaScript if block editor is enabled
+add_action('admin_enqueue_scripts', function($hook) {
+	if (!in_array($hook, ['post.php', 'post-new.php'])) {
+		return;
+	}
+
+	$post_type = get_post_type();
+	if (!$post_type || !in_array($post_type, get_post_types_with_tags())) {
+		return;
+	}
+
+	// Load Block Editor assets
+	if (use_block_editor_for_post_type($post_type)) {
+		wp_enqueue_script(
+			'tag-order-script',
+			plugins_url('/assets/js/set-tag-order.js', __FILE__),
+			['wp-plugins', 'wp-editor', 'wp-element', 'wp-components', 'wp-data'],
+			'1.0.2',
+			true
+		);
+	}
+});
