@@ -29,6 +29,12 @@ add_action( 'admin_init', function () {
 		'sanitize_callback' => 'sanitize_text_field'
 	] );
 
+	register_setting( 'tag_order_settings', 'tag_order_debug_mode', [
+		'type'              => 'boolean',
+		'default'           => false,
+		'sanitize_callback' => 'rest_sanitize_boolean'
+	] );
+
 	add_settings_section(
 		'tag_order_main_section',
 		'Display Settings',
@@ -61,6 +67,30 @@ add_action( 'admin_init', function () {
 		'tag_order_settings',
 		'tag_order_main_section'
 	);
+
+	add_settings_section(
+		'tag_order_advanced_section',
+		'Advanced Settings',
+		function () {
+			echo '<p>These settings are intended for development and troubleshooting purposes.</p>';
+		},
+		'tag_order_settings'
+	);
+
+	add_settings_field(
+		'debug_mode',
+		'Debug Mode',
+		function () {
+			$debug_mode = get_option( 'tag_order_debug_mode', false );
+			echo '<label for="tag_order_debug_mode">';
+			echo '<input type="checkbox" id="tag_order_debug_mode" name="tag_order_debug_mode" value="1" ' . checked( $debug_mode, true, false ) . ' />';
+			echo ' Enable debug logging';
+			echo '</label>';
+			echo '<p class="description">When enabled, diagnostic information will be written to the error log. Use only for troubleshooting.</p>';
+		},
+		'tag_order_settings',
+		'tag_order_advanced_section'
+	);
 } );
 
 // Render settings page
@@ -81,4 +111,16 @@ function render_tag_order_settings() {
         </form>
     </div>
 	<?php
+}
+
+/**
+ * Helper function to log debug messages when debug mode is enabled
+ *
+ * @param string $message The message to log
+ * @return void
+ */
+function tag_order_debug_log( $message ) {
+	if ( get_option( 'tag_order_debug_mode', false ) ) {
+		error_log( '[Set Tag Order] ' . $message );
+	}
 }
