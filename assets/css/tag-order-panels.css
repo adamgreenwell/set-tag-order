@@ -1,0 +1,70 @@
+/**
+ * Tag Order Panel CSS
+ *
+ * Ensures the Tag Order panel appears after the Tags panel
+ * using standard CSS that works across all browsers
+ *
+ * @package    SetTagOrder
+ * @since      1.0.5
+ */
+
+/*
+ * Add custom attributes to panels for easier targeting
+ * This is done via JavaScript, but we prepare the CSS anyway
+ */
+.sto-tags-panel {
+    order: 10 !important;
+}
+
+.sto-tag-order-panel {
+    order: 11 !important;
+}
+
+.sto-categories-panel {
+    order: 12 !important;
+}
+
+/*
+ * Panel order using order property
+ * We use attribute selectors to target panels by data-name
+ */
+.edit-post-sidebar .components-panel,
+.interface-interface-skeleton__sidebar .components-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Tag Order panel */
+[data-name="tag-order-panel"] {
+    order: 11 !important;
+}
+
+/*
+ * Visual enhancement for Tag Order panel
+ * This makes it appear visually connected to the Tags panel
+ */
+[data-name="tag-order-panel"] {
+    border-top: 1px solid #f0f0f0 !important;
+    margin-top: -1px !important;
+    background-color: #fbfbfb;
+}
+
+/* On hover/focus, normalize background */
+[data-name="tag-order-panel"]:hover,
+[data-name="tag-order-panel"]:focus-within {
+    background-color: #fff !important;
+}
+
+/* Custom styling for expanded state */
+[data-name="tag-order-panel"].is-opened {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+/*
+ * Add visual connection between Tags and Tag Order panels
+ * We use JS to add these classes, but prepare the styles here
+ */
+.sto-connected-panel {
+    border-top-color: #f0f0f0 !important;
+    margin-top: -1px !important;
+}
