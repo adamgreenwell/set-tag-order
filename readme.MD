@@ -26,6 +26,12 @@ Documentation pending
 
 ## Changelog ##
 
+### 1.0.5 ###
+*Release Date - 19 February 2025*
+
+* Improve classic or block editor usage detection
+* Retain tag integrity when switching editors
+
 ### 1.0.3 ###
 *Release Date - 18 February 2025*
 
