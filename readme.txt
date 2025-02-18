@@ -2,8 +2,8 @@
 
 Contributors: Adam Greenwell
 
-Stable tag: 1.0.1
-Tested up to: 6.7
+Stable tag: 1.0.3
+Tested up to: 6.7.2
 Requires at least: 5.2
 Requires PHP: 7.4
 Requires at least: 7.4
@@ -26,6 +26,13 @@ displayed in the set order using the built-in WordPress "the_tags()" function or
 Documentation pending
 
 == Changelog ==
+
+= 1.0.3 =
+*Release Date - 18 February 2025*
+
+* Added support for Classic Editor
+* Fixed application of tag classes and separators
+* Added explicit debug log option
 
 = 1.0.2 =
 *Release Date - 21 November 2024*
