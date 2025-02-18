@@ -1,10 +1,23 @@
 <?php
+/**
+ * Plugin Settings
+ *
+ * Handles the admin settings page and options for the Set Tag Order plugin.
+ *
+ * @package    SetTagOrder
+ * @subpackage Admin
+ * @author     Adam Greenwell
+ * @since      1.0.0
+ */
 
-/*
-* File Name: set-tag-order.php
-*/
-
-// Register settings page
+/**
+ * Register settings page
+ *
+ * Adds the plugin settings page to the WordPress admin menu
+ *
+ * @since 1.0.0
+ * @return void
+ */
 add_action( 'admin_menu', function () {
 	add_options_page(
 		'Tag Order Settings',
@@ -15,8 +28,16 @@ add_action( 'admin_menu', function () {
 	);
 } );
 
-// Register settings
+/**
+ * Register settings and fields
+ *
+ * Creates all the settings fields and sections for the plugin options
+ *
+ * @since 1.0.0
+ * @return void
+ */
 add_action( 'admin_init', function () {
+	// Register settings with validation callbacks
 	register_setting( 'tag_order_settings', 'tag_order_separator', [
 		'type'              => 'string',
 		'default'           => '',
@@ -35,6 +56,7 @@ add_action( 'admin_init', function () {
 		'sanitize_callback' => 'rest_sanitize_boolean'
 	] );
 
+	// Display settings section
 	add_settings_section(
 		'tag_order_main_section',
 		'Display Settings',
@@ -44,6 +66,7 @@ add_action( 'admin_init', function () {
 		'tag_order_settings'
 	);
 
+	// Tag separator field
 	add_settings_field(
 		'tag_separator',
 		'Tag Separator',
@@ -56,6 +79,7 @@ add_action( 'admin_init', function () {
 		'tag_order_main_section'
 	);
 
+	// Tag CSS class field
 	add_settings_field(
 		'tag_class',
 		'Tag CSS Class',
@@ -68,6 +92,7 @@ add_action( 'admin_init', function () {
 		'tag_order_main_section'
 	);
 
+	// Advanced settings section
 	add_settings_section(
 		'tag_order_advanced_section',
 		'Advanced Settings',
@@ -77,6 +102,7 @@ add_action( 'admin_init', function () {
 		'tag_order_settings'
 	);
 
+	// Debug mode field
 	add_settings_field(
 		'debug_mode',
 		'Debug Mode',
@@ -93,7 +119,14 @@ add_action( 'admin_init', function () {
 	);
 } );
 
-// Render settings page
+/**
+ * Render settings page
+ *
+ * Outputs the HTML for the plugin settings page
+ *
+ * @since 1.0.0
+ * @return void
+ */
 function render_tag_order_settings() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
@@ -111,16 +144,4 @@ function render_tag_order_settings() {
         </form>
     </div>
 	<?php
-}
-
-/**
- * Helper function to log debug messages when debug mode is enabled
- *
- * @param string $message The message to log
- * @return void
- */
-function tag_order_debug_log( $message ) {
-	if ( get_option( 'tag_order_debug_mode', false ) ) {
-		error_log( '[Set Tag Order] ' . $message );
-	}
 }
