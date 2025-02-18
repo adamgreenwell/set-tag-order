@@ -2,7 +2,7 @@
 /*
 * Plugin Name: Set Tag Order
 * Description: Allows setting custom order for post tags in the block editor
-* Version: 1.0.2
+* Version: 1.0.3
 * Author: Adam Greenwell
 *
 * File Name: set-tag-order.php
@@ -57,34 +57,36 @@ function order_tags( $tags, $post_id ) {
 	}
 
 	$tag_order = get_post_meta( $post_id, '_tag_order', true );
+	tag_order_debug_log( 'Tag Order for post ' . $post_id . ': ' . $tag_order );
 
-	// Debug log
-	error_log( 'Tag Order for post ' . $post_id . ': ' . $tag_order );
-
-	if ( ! $tag_order ) {
+	if ( empty( $tag_order ) ) {
 		return $tags;
 	}
 
-	$order        = explode( ',', $tag_order );
-	$ordered_tags = [];
-
-	// Reorder tags based on saved order
-	foreach ( $order as $tag_id ) {
-		foreach ( $tags as $tag ) {
-			if ( $tag->term_id == $tag_id ) {
-				$ordered_tags[] = $tag;
-				break;
-			}
-		}
-	}
-
-	// Add any remaining tags
+	// Create an associative array of tags indexed by term_id for faster lookup
+	$tags_by_id = array();
 	foreach ( $tags as $tag ) {
-		if ( ! in_array( $tag, $ordered_tags ) ) {
-			$ordered_tags[] = $tag;
+		$tags_by_id[$tag->term_id] = $tag;
+	}
+
+	$order = array_map( 'intval', explode( ',', $tag_order ) );
+	$ordered_tags = array();
+
+	// First add all tags that are in the saved order
+	foreach ( $order as $tag_id ) {
+		if ( isset( $tags_by_id[$tag_id] ) ) {
+			$ordered_tags[] = $tags_by_id[$tag_id];
+			// Remove from the associative array to mark as processed
+			unset( $tags_by_id[$tag_id] );
 		}
 	}
 
+	// Add any remaining unordered tags
+	foreach ( $tags_by_id as $tag ) {
+		$ordered_tags[] = $tag;
+	}
+
+	tag_order_debug_log( 'Ordered ' . count( $ordered_tags ) . ' tags for post ' . $post_id );
 	return $ordered_tags;
 }
 
@@ -172,17 +174,24 @@ function render_custom_tag_box($post) {
 		       value="<?php echo esc_attr(implode(',', wp_list_pluck($post_tags, 'term_id'))); ?>" />
 
 		<div class="ajaxtag hide-if-no-js">
-			<p><?php _e('Start typing to search existing tags, or add new ones.'); ?></p>
+			<p><?php esc_html_e('Start typing to search existing tags, or add new ones.'); ?></p>
 		</div>
 	</div>
 
 	<style>
+        .jaxtag {
+            margin-top: 15px;
+        }
+        .tagchecklist {
+            margin-left: 0;
+            margin-top: 15px;
+        }
         .tag-list {
             margin: 0;
             padding: 0;
         }
         .tag-list li {
-            padding: 8px;
+            padding: 8px 8px 8px 30px;
             margin: 4px 0;
             background: #f0f0f0;
             border: 1px solid #ddd;
@@ -196,6 +205,7 @@ function render_custom_tag_box($post) {
             background: #e5e5e5;
         }
         .ntdelbutton {
+            left: 36px;
             border: none;
             background: none;
             color: #a00;
@@ -354,7 +364,7 @@ add_action('wp_ajax_add-tag', function() {
 // Add debug action to verify meta is being saved
 add_action( 'updated_post_meta', function ( $meta_id, $post_id, $meta_key, $meta_value ) {
 	if ( $meta_key === '_tag_order' ) {
-		error_log( 'Updated tag order for post ' . $post_id . ': ' . $meta_value );
+		tag_order_debug_log( 'Updated tag order for post ' . $post_id . ': ' . $meta_value );
 	}
 }, 10, 4 );
 
@@ -371,6 +381,145 @@ add_filter( 'get_the_terms', function ( $terms, $post_id, $taxonomy ) {
 
 	return order_tags( $terms, $post_id );
 }, 10, 3 );
+
+// Filter tag cloud widget to use our order
+add_filter('get_terms', function ($terms, $taxonomies, $args) {
+	global $post;
+
+	// Only filter if this is a tag cloud for post_tag
+	if (!is_array($taxonomies) || !in_array('post_tag', $taxonomies) || !isset($args['widget_id']) || $args['widget_id'] !== 'tag_cloud') {
+		return $terms;
+	}
+
+	if (!$post) {
+		return $terms;
+	}
+
+	// Get ordered tags
+	$ordered_tags = get_ordered_post_tags($post->ID);
+	if (!$ordered_tags) {
+		return $terms;
+	}
+
+	return $ordered_tags;
+}, 10, 3);
+
+// Force the use of our class in tag links
+add_filter('term_links-post_tag', function ($links) {
+	// Only apply in frontend
+	if (is_admin()) {
+		return $links;
+	}
+
+	$post_id = get_the_ID();
+	if (!$post_id) {
+		return $links;
+	}
+
+	// Check if this post type supports tags
+	$post_type = get_post_type($post_id);
+	if (!in_array($post_type, get_post_types_with_tags())) {
+		return $links;
+	}
+
+	// Get the ordered tags
+	$tags = get_ordered_post_tags($post_id);
+	if (!$tags) {
+		return $links;
+	}
+
+	// Get settings
+	$separator = get_option('tag_order_separator', '');
+	$custom_class = get_option('tag_order_class', 'tag');
+
+	// Check if we need to apply our custom format
+	if (empty($separator) && $custom_class === 'tag') {
+		// Just maintain the order without changing format
+		$ordered_links = array();
+		foreach ($tags as $tag) {
+			$link = get_term_link($tag, 'post_tag');
+			if (!is_wp_error($link)) {
+				$ordered_links[] = '<a href="' . esc_url($link) . '" rel="tag">' . esc_html($tag->name) . '</a>';
+			}
+		}
+		return $ordered_links;
+	}
+
+	// Get the existing links to preserve classes and other attributes
+	$existing_links_by_tag = array();
+	foreach ($links as $link) {
+		// Extract tag name from link
+		if (preg_match('/>([^<]+)<\/a>/', $link, $matches)) {
+			$tag_name = trim($matches[1]);
+			$existing_links_by_tag[$tag_name] = $link;
+		}
+	}
+
+	// Apply custom format with our separator and class, preserving other attributes
+	$custom_links = array();
+	foreach ($tags as $tag) {
+		$tag_name = $tag->name;
+
+		// Check if we have an existing link for this tag
+		if (isset($existing_links_by_tag[$tag_name])) {
+			$existing_link = $existing_links_by_tag[$tag_name];
+
+			// If we need to add our custom class
+			if ($custom_class !== 'tag') {
+				// If link already has a class attribute, add our class to it
+				if (preg_match('/class=(["\'])([^"\']+)\\1/', $existing_link, $class_matches)) {
+					$existing_classes = $class_matches[2];
+					$updated_classes = $existing_classes;
+
+					// Only add our class if it's not already there
+					if (strpos($existing_classes, $custom_class) === false) {
+						$updated_classes = $existing_classes . ' ' . $custom_class;
+					}
+
+					$existing_link = str_replace(
+						'class=' . $class_matches[1] . $existing_classes . $class_matches[1],
+						'class=' . $class_matches[1] . $updated_classes . $class_matches[1],
+						$existing_link
+					);
+				} else {
+					// No existing class, add ours
+					$existing_link = str_replace('<a ', '<a class="' . esc_attr($custom_class) . '" ', $existing_link);
+				}
+			}
+
+			$custom_links[] = $existing_link;
+		} else {
+			// Create a new link with our class
+			$link = get_term_link($tag, 'post_tag');
+			if (!is_wp_error($link)) {
+				$custom_links[] = '<a href="' . esc_url($link) . '" class="' . esc_attr($custom_class) . '">' . esc_html($tag->name) . '</a>';
+			}
+		}
+	}
+
+	return $custom_links;
+}, 20, 1);
+
+// Add a filter for the_tags output
+add_filter('the_tags', function ($output, $before, $sep, $after) {
+	$custom_separator = get_option('tag_order_separator', '');
+
+	// Only modify if we have a custom separator
+	if (!empty($custom_separator) && !empty($output)) {
+		// Replace default separator with our custom one
+		// First find what separator was actually used (it might not be $sep)
+		$first_tag_pos = strpos($output, '</a>') + 4;
+		$next_tag_pos = strpos($output, '<a', $first_tag_pos);
+
+		if ($first_tag_pos !== false && $next_tag_pos !== false) {
+			$actual_sep = substr($output, $first_tag_pos, $next_tag_pos - $first_tag_pos);
+			// Replace all instances of this separator with our custom one
+			$output = str_replace($actual_sep, '<span class="tag-separator">' . esc_html($custom_separator) . '</span>', $output);
+		}
+	}
+
+	return $output;
+}, 20, 4);
 
 // Helper function for template use
 function get_ordered_post_tags( $post_id = null ) {
@@ -393,31 +542,43 @@ function get_ordered_post_tags( $post_id = null ) {
 }
 
 // Update the existing the_ordered_post_tags() function
-function the_ordered_post_tags() {
-	$tags = get_ordered_post_tags();
-	if ( ! $tags ) {
+function the_ordered_post_tags($before = '', $sep = '', $after = '', $post_id = 0) {
+	if (!$post_id) {
+		$post_id = get_the_ID();
+	}
+
+	$tags = get_ordered_post_tags($post_id);
+	if (!$tags) {
 		return;
 	}
 
-	$separator = get_option( 'tag_order_separator', '' );
-	$class     = get_option( 'tag_order_class', 'tag' );
+	// Get separator from settings or use provided parameter
+	$separator = get_option('tag_order_separator');
+	if ($separator === '' && $sep !== '') {
+		$separator = $sep;
+	}
 
-	$html = '<div class="post-tags">';
+	// Get class
+	$class = get_option('tag_order_class', 'tag');
 
-	foreach ( $tags as $index => $tag ) {
-		if ( $index > 0 && ! empty( $separator ) ) {
-			$html .= '<span class="tag-separator">' . esc_html( $separator ) . '</span>';
+	$html = $before;
+
+	foreach ($tags as $index => $tag) {
+		if ($index > 0 && !empty($separator)) {
+			$html .= '<span class="tag-separator">' . esc_html($separator) . '</span>';
+		} elseif ($index > 0) {
+			$html .= $sep; // Use default separator if custom is empty
 		}
 
 		$html .= sprintf(
 			'<a href="%s" class="%s">%s</a>',
-			get_tag_link( $tag->term_id ),
-			esc_attr( $class ),
-			esc_html( $tag->name )
+			get_tag_link($tag->term_id),
+			esc_attr($class),
+			esc_html($tag->name)
 		);
 	}
 
-	$html .= '</div>';
+	$html .= $after;
 
 	echo $html;
 }
@@ -439,7 +600,7 @@ add_action('admin_enqueue_scripts', function($hook) {
 			'tag-order-script',
 			plugins_url('/assets/js/set-tag-order.js', __FILE__),
 			['wp-plugins', 'wp-editor', 'wp-element', 'wp-components', 'wp-data'],
-			'1.0.2',
+			'1.0.3',
 			true
 		);
 	}
