@@ -13,7 +13,7 @@
  * @wordpress-plugin
  * Plugin Name: Set Tag Order
  * Description: Allows setting custom order for post tags in the block editor
- * Version:     1.0.4
+ * Version:     1.0.5
  * Author:      Adam Greenwell
  * License:     GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
