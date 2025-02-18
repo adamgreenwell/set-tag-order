@@ -1,18 +1,81 @@
 <?php
+/**
+ * GitHub Updater Class
+ *
+ * Handles checking for updates and installing updates from GitHub repositories.
+ *
+ * @package    SetTagOrder
+ * @subpackage Update
+ * @author     Adam Greenwell
+ * @since      1.0.2
+ */
 
-/*
-* File Name: update/github-updater.php
-*/
-
+/**
+ * Set Tag Order GitHub Updater
+ *
+ * Provides update functionality by connecting to GitHub API and comparing
+ * version information between the installed plugin and the latest release.
+ *
+ * @since 1.0.2
+ */
 class Set_Tag_Order_GitHub_Updater
 {
+	/**
+	 * Plugin slug
+	 *
+	 * @since 1.0.2
+	 * @var string
+	 */
 	private $slug;
+
+	/**
+	 * Plugin data from get_plugin_data()
+	 *
+	 * @since 1.0.2
+	 * @var array
+	 */
 	private $plugin_data;
+
+	/**
+	 * GitHub username
+	 *
+	 * @since 1.0.2
+	 * @var string
+	 */
 	private $username;
+
+	/**
+	 * GitHub repository name
+	 *
+	 * @since 1.0.2
+	 * @var string
+	 */
 	private $repo;
+
+	/**
+	 * Full path to plugin file
+	 *
+	 * @since 1.0.2
+	 * @var string
+	 */
 	private $plugin_file;
+
+	/**
+	 * GitHub API response data
+	 *
+	 * @since 1.0.2
+	 * @var object
+	 */
 	private $github_response;
 
+	/**
+	 * Constructor
+	 *
+	 * Sets up the properties and hooks the actions and filters
+	 *
+	 * @since 1.0.2
+	 * @param string $plugin_file Full path to the main plugin file
+	 */
 	public function __construct($plugin_file)
 	{
 		$this->plugin_file = $plugin_file;
@@ -23,12 +86,26 @@ class Set_Tag_Order_GitHub_Updater
 		add_filter('upgrader_post_install', [$this, 'after_install'], 10, 3);
 	}
 
+	/**
+	 * Set GitHub repository information
+	 *
+	 * @since 1.0.2
+	 * @param string $username GitHub username
+	 * @param string $repo     GitHub repository name
+	 * @return void
+	 */
 	public function set_github_info($username, $repo)
 	{
 		$this->username = $username;
 		$this->repo = $repo;
 	}
 
+	/**
+	 * Fetch repository information from GitHub API
+	 *
+	 * @since 1.0.2
+	 * @return void|bool False on failure
+	 */
 	private function get_repository_info()
 	{
 		if (!empty($this->github_response)) {
@@ -47,6 +124,13 @@ class Set_Tag_Order_GitHub_Updater
 		$this->github_response = $response;
 	}
 
+	/**
+	 * Modify the transient before WordPress checks for plugin updates
+	 *
+	 * @since 1.0.2
+	 * @param object $transient WordPress update transient
+	 * @return object Modified transient
+	 */
 	public function modify_transient($transient)
 	{
 		if (!isset($transient->checked)) {
@@ -79,6 +163,15 @@ class Set_Tag_Order_GitHub_Updater
 		return $transient;
 	}
 
+	/**
+	 * Update plugin details in the plugin list popup
+	 *
+	 * @since 1.0.2
+	 * @param false|object|array $result  The result object or array
+	 * @param string             $action  The API action being performed
+	 * @param object             $args    Plugin API arguments
+	 * @return object Plugin information
+	 */
 	public function plugin_popup($result, $action, $args)
 	{
 		if ($action !== 'plugin_information') {
@@ -108,6 +201,15 @@ class Set_Tag_Order_GitHub_Updater
 		];
 	}
 
+	/**
+	 * Actions to perform after installing an update
+	 *
+	 * @since 1.0.2
+	 * @param bool  $response   Installation response
+	 * @param array $hook_extra Extra arguments passed to hooked filters
+	 * @param array $result     Installation result data
+	 * @return array Modified installation result data
+	 */
 	public function after_install($response, $hook_extra, $result)
 	{
 		global $wp_filesystem;
