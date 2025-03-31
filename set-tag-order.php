@@ -845,7 +845,7 @@ function the_ordered_post_tags($before = '', $sep = '', $after = '', $post_id = 
 
 	$html .= $after;
 
-	echo $html;
+	echo wp_kses_post($html);
 }
 
 /**
