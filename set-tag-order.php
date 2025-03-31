@@ -901,7 +901,7 @@ function sto_improved_editor_detection_js() {
                 var xhr = new XMLHttpRequest();
                 xhr.open('POST', ajaxurl);
                 xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-                xhr.send('action=set_tag_order_editor_mode&mode=block&_wpnonce=<?php echo wp_create_nonce('set_tag_order_editor_mode'); ?>');
+                xhr.send('action=set_tag_order_editor_mode&mode=block&_wpnonce=<?php echo esc_js(wp_create_nonce('set_tag_order_editor_mode')); ?>');
 
                 // When using Block Editor, make sure our debug logging knows
                 wp.domReady(function() {
