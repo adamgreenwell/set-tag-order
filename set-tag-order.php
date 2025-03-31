@@ -1255,8 +1255,9 @@ function sto_sync_tag_order_on_rest_update($prepared_post, $request) {
  * @return void
  */
 add_action('save_post', function($post_id) {
+	// Verify nonce with proper sanitization
 	if (!isset($_POST['tag_order_meta_box_nonce']) ||
-	    !wp_verify_nonce($_POST['tag_order_meta_box_nonce'], 'tag_order_meta_box')) {
+	    !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['tag_order_meta_box_nonce'])), 'tag_order_meta_box')) {
 		return;
 	}
 
@@ -1271,7 +1272,7 @@ add_action('save_post', function($post_id) {
 	if (isset($_POST['post_tags'])) {
 		// Make sure we're getting numeric IDs only
 		$tag_ids = array_filter(
-			explode(',', sanitize_text_field($_POST['post_tags'])),
+			explode(',', sanitize_text_field(wp_unslash($_POST['post_tags']))),
 			'is_numeric'
 		);
 
@@ -1292,7 +1293,7 @@ add_action('save_post', function($post_id) {
 	}
 
 	if (isset($_POST['tag_order'])) {
-		$tag_order = sanitize_text_field($_POST['tag_order']);
+		$tag_order = sanitize_text_field(wp_unslash($_POST['tag_order']));
 		update_post_meta(
 			$post_id,
 			'_tag_order',
