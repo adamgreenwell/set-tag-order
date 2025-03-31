@@ -856,7 +856,11 @@ function the_ordered_post_tags($before = '', $sep = '', $after = '', $post_id = 
  */
 function sto_ajax_set_editor_mode() {
 	$user_id = get_current_user_id();
-	check_ajax_referer('set_tag_order_editor_mode');
+	
+	// Verify nonce with proper sanitization
+	if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'set_tag_order_editor_mode')) {
+		wp_send_json_error('Invalid nonce');
+	}
 
 	if (isset($_POST['mode']) && $_POST['mode'] === 'classic') {
 		// Store in user meta
