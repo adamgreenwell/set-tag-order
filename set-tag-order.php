@@ -1493,3 +1493,20 @@ function synchronize_tag_order_on_load($post_id) {
 		sto_debug_log("Synchronized tag order on load for post $post_id: " . implode(',', $new_order));
 	}
 }
+
+/**
+ * Direct hook into post-terms block rendering
+ */
+function sto_override_post_terms_block() {
+    // Unregister the core block pattern
+    unregister_block_type('core/post-terms');
+    
+    // Re-register with our custom render callback
+    register_block_type('core/post-terms', array(
+        'api_version' => 2,
+        'render_callback' => 'sto_render_post_terms_block'
+    ));
+    
+    sto_debug_log("Registered custom post-terms block renderer");
+}
+add_action('init', 'sto_override_post_terms_block', 20); // Higher priority to override core
