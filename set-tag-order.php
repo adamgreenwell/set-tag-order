@@ -242,9 +242,162 @@ add_filter('term_links-post_tag', function($links) {
 }, 20, 1);
 
 /**
- * Add a filter for the_tags output
+ * Filter Block Editor tag separator
  *
- * Applies custom separator from plugin settings
+ * @since 1.0.5
+ * @param string $separator The separator text
+ * @return string Modified separator text
+ */
+function set_tag_order_filter_block_separator($separator) {
+	$custom_separator = get_option('tag_order_separator', '');
+	
+	sto_debug_log("Filter wp_block_post_terms_separator called - Separator: '$separator', Custom: '$custom_separator'");
+	
+	if (!empty($custom_separator)) {
+		return $custom_separator;
+	}
+	return $separator;
+}
+add_filter('wp_block_post_terms_separator', 'set_tag_order_filter_block_separator', 10, 1);
+
+/**
+ * Filter Block Editor post-terms block output
+ *
+ * @since 1.0.6
+ * @param string $block_content The block content
+ * @param array  $block         The full block, including name and attributes
+ * @return string Modified block content
+ */
+function set_tag_order_filter_post_terms_block($block_content, $block) {
+    // Our custom renderer is now handling the main tag output
+    // This filter should not add additional classes as they're already added in the renderer
+    
+    // Only process post-terms blocks
+    if (empty($block['blockName']) || $block['blockName'] !== 'core/post-terms') {
+        return $block_content;
+    }
+    
+    $custom_separator = get_option('tag_order_separator', '');
+    $custom_class = get_option('tag_order_class', 'tag');
+    
+    // Log the taxonomy type from block attributes
+    if (!empty($block['attrs']) && !empty($block['attrs']['term'])) {
+        sto_debug_log("Filter render_block called for post-terms with taxonomy: '{$block['attrs']['term']}', Custom separator: '$custom_separator', Custom class: '$custom_class'");
+    } else {
+        sto_debug_log("Filter render_block called for post-terms - Custom separator: '$custom_separator', Custom class: '$custom_class'");
+    }
+    
+    // Debugging: Log the complete block content
+    sto_debug_log("Block content: " . $block_content);
+    
+    // We're no longer modifying classes here since they're added in the renderer
+    return $block_content;
+}
+add_filter('render_block', 'set_tag_order_filter_post_terms_block', 10, 2);
+
+/**
+ * Custom renderer for post-terms block
+ */
+function sto_render_post_terms_block($attributes, $content, $block) {
+    $post_id = isset($block->context['postId']) ? $block->context['postId'] : 0;
+    if (!$post_id) {
+        global $post;
+        $post_id = $post ? $post->ID : 0;
+    }
+    
+    $term_type = isset($attributes['term']) ? $attributes['term'] : 'post_tag';
+    sto_debug_log("Custom post-terms renderer called for post $post_id with term type $term_type");
+    
+    if ($term_type !== 'post_tag') {
+        // If not rendering tags, let WordPress handle it
+        return $content;
+    }
+    
+    // Get our ordered tags using our existing function
+    $tags = get_ordered_post_tags($post_id);
+    
+    if (!$tags || empty($tags)) {
+        sto_debug_log("No tags found for post $post_id in custom renderer");
+        return $content; // Return original content if no tags
+    }
+    
+    $tag_count = count($tags);
+    sto_debug_log("Custom renderer found $tag_count tags for post $post_id");
+    
+    // Get separator and class settings
+    $separator = get_option('tag_order_separator', '');
+    if (empty($separator) && isset($attributes['separator'])) {
+        $separator = $attributes['separator'];
+    }
+    
+    // Get custom classes - parse into array to prevent duplication
+    $custom_class = get_option('tag_order_class', 'tag');
+    $custom_classes = explode(' ', $custom_class);
+    $custom_classes = array_map('trim', $custom_classes);
+    $custom_classes = array_filter($custom_classes);
+    
+    // Start building output
+    $classes = 'taxonomy-post_tag wp-block-post-terms';
+    if (!empty($attributes['className'])) {
+        $classes .= ' ' . $attributes['className'];
+    }
+    
+    $html = '<div class="' . esc_attr($classes) . '">';
+    
+    foreach ($tags as $index => $tag) {
+        if ($index > 0 && !empty($separator)) {
+            $html .= '<span class="wp-block-post-terms__separator">' . esc_html($separator) . '</span>';
+        }
+        
+        $tag_link = get_term_link($tag, 'post_tag');
+        if (!is_wp_error($tag_link)) {
+            $html .= '<a href="' . esc_url($tag_link) . '" class="' . esc_attr(implode(' ', $custom_classes)) . '" rel="tag">' . 
+                     esc_html($tag->name) . '</a>';
+        }
+    }
+    
+    $html .= '</div>';
+    sto_debug_log("Custom renderer generated HTML for tags");
+    
+    return $html;
+}
+
+/**
+ * Add debug filter to track get_the_terms
+ * 
+ * @since 1.0.6
+ */
+function sto_debug_get_the_terms($terms, $post_id, $taxonomy) {
+	if ($taxonomy === 'post_tag') {
+		sto_debug_log("get_the_terms filter for post $post_id with taxonomy $taxonomy returned " . 
+			(is_array($terms) ? count($terms) : 'non-array') . " terms");
+		
+		if (is_array($terms) && !empty($terms)) {
+			$term_names = array_map(function($term) { 
+				return $term->name; 
+			}, $terms);
+			sto_debug_log("Terms: " . implode(', ', $term_names));
+		} else {
+			sto_debug_log("No terms found or terms is not an array");
+		}
+	}
+	return $terms;
+}
+add_filter('get_the_terms', 'sto_debug_get_the_terms', 999, 3);
+
+/**
+ * Add debug filter for post-terms block attributes
+ */
+function sto_debug_pre_render_block($pre_render, $parsed_block) {
+	if (!empty($parsed_block['blockName']) && $parsed_block['blockName'] === 'core/post-terms') {
+		sto_debug_log("Pre-render for post-terms block: " . json_encode($parsed_block['attrs']));
+	}
+	return $pre_render;
+}
+add_filter('pre_render_block', 'sto_debug_pre_render_block', 10, 2);
+
+/**
+ * Filter the_tags output to apply custom separator
  *
  * @since 1.0.3
  * @param string $output HTML output
@@ -253,25 +406,68 @@ add_filter('term_links-post_tag', function($links) {
  * @param string $after  Text to display after
  * @return string Modified HTML output
  */
-add_filter('the_tags', function($output, $before, $sep, $after) {
+function set_tag_order_filter_the_tags($output, $before, $sep, $after) {
 	$custom_separator = get_option('tag_order_separator', '');
+
+	sto_debug_log("Filter the_tags called - Default separator: '$sep', Custom: '$custom_separator'");
 
 	// Only modify if we have a custom separator
 	if (!empty($custom_separator) && !empty($output)) {
-		// Replace default separator with our custom one
-		// First find what separator was actually used (it might not be $sep)
+		// Store original for debugging
+		$original_output = $output;
+		
+		// Classic Editor handling
 		$first_tag_pos = strpos($output, '</a>') + 4;
 		$next_tag_pos = strpos($output, '<a', $first_tag_pos);
 
-		if ($first_tag_pos !== false && $next_tag_pos !== false) {
-			$actual_sep = substr($output, $first_tag_pos, $next_tag_pos - $first_tag_pos);
-			// Replace all instances of this separator with our custom one
-			$output = str_replace($actual_sep, '<span class="tag-separator">' . esc_html($custom_separator) . '</span>', $output);
+		if ($next_tag_pos !== false) {
+			// Find the actual separator used
+			$actual_separator = substr($output, $first_tag_pos, $next_tag_pos - $first_tag_pos);
+			$actual_separator = trim($actual_separator);
+			
+			sto_debug_log("Actual separator found: '$actual_separator'");
+			
+			// Replace the actual separator with our custom one
+			$output = str_replace(
+				$actual_separator,
+				'<span class="tag-separator">' . esc_html($custom_separator) . '</span>',
+				$output
+			);
+			
+			// Log whether the replacement was successful
+			if ($original_output !== $output) {
+				sto_debug_log("Custom separator applied to the_tags output");
+			} else {
+				sto_debug_log("Warning: Failed to replace separator in the_tags output");
+			}
 		}
 	}
 
 	return $output;
-}, 20, 4);
+}
+add_filter('the_tags', 'set_tag_order_filter_the_tags', 10, 4);
+
+/**
+ * Add custom CSS for tag separators
+ *
+ * @since 1.0.5
+ * @return void
+ */
+function set_tag_order_custom_css() {
+	$custom_separator = get_option('tag_order_separator', '');
+	if (!empty($custom_separator)) {
+		$custom_css = '
+			.tag-separator {
+				display: inline-block;
+				margin: 0 0.25em;
+				font-size: 1.2em;
+				color: #999;
+			}
+		';
+		wp_add_inline_style('wp-block-library', $custom_css);
+	}
+}
+add_action('wp_enqueue_scripts', 'set_tag_order_custom_css');
 
 /**
  * Synchronize tag order metadata whenever post tags are updated
