@@ -1310,7 +1310,17 @@ add_action('save_post', function($post_id) {
  * @return void
  */
 add_action('wp_ajax_add-tag', function() {
-	$tag_name = sanitize_text_field($_POST['tag_name']);
+	// Verify nonce with proper sanitization
+	if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'add_tag_nonce')) {
+		wp_send_json_error('Invalid nonce');
+	}
+
+	// Validate and sanitize tag name
+	if (!isset($_POST['tag_name']) || empty($_POST['tag_name'])) {
+		wp_send_json_error('Tag name is required');
+	}
+
+	$tag_name = sanitize_text_field(wp_unslash($_POST['tag_name']));
 	$tag = wp_insert_term($tag_name, 'post_tag');
 
 	if (is_wp_error($tag)) {
