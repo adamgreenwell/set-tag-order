@@ -50,6 +50,11 @@ function tag_order_debug_log( $message ) {
  * @since 1.0.4
  */
 add_action('load-post.php', function() {
+	// Verify nonce for post loading
+	if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'load-post')) {
+		return;
+	}
+
 	if (isset($_GET['post'])) {
 		$post_id = intval($_GET['post']);
 		synchronize_tag_order_on_load($post_id);
