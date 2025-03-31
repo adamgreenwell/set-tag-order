@@ -1077,7 +1077,8 @@ function render_custom_tag_box($post) {
                 } else {
                     // Create new tag
                     wp.ajax.post('add-tag', {
-                        tag_name: tagName
+                        tag_name: tagName,
+                        _wpnonce: '<?php echo wp_create_nonce('add_tag_nonce'); ?>'
                     }).done(function(response) {
                         addTag(response.term_id, response.name);
                         existingTags.push({
