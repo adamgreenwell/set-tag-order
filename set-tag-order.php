@@ -34,8 +34,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return void
  */
 function tag_order_debug_log( $message ) {
-	if ( get_option( 'tag_order_debug_mode', false ) ) {
-		error_log( '[Set Tag Order] ' . $message );
+	if ( defined( 'WP_DEBUG' ) && WP_DEBUG && get_option( 'tag_order_debug_mode', false ) ) {
+		// Use WordPress's built-in logging function when available
+		if ( function_exists( 'wp_privacy_anonymize_data' ) ) {
+			error_log( wp_privacy_anonymize_data( 'message', '[Set Tag Order] ' . $message ) );
+		} else {
+			error_log( '[Set Tag Order] ' . $message );
+		}
 	}
 }
 
