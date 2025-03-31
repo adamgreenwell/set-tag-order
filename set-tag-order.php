@@ -592,15 +592,6 @@ add_action('updated_post_meta', function($meta_id, $post_id, $meta_key, $meta_va
 
 // Include dependencies
 require_once plugin_dir_path( __FILE__ ) . 'inc/admin/settings.php';
-require_once plugin_dir_path( __FILE__ ) . 'update/github-updater.php';
-
-/**
- * Initialize GitHub updater
- *
- * @since 1.0.2
- */
-$updater = new Set_Tag_Order_GitHub_Updater( __FILE__ );
-$updater->set_github_info( 'adamgreenwell', 'set-tag-order' );
 
 /**
  * Plugin debugging function
