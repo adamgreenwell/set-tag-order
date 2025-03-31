@@ -226,9 +226,9 @@ add_filter('term_links-post_tag', function($links) {
 					// No existing class, add ours
 					$existing_link = str_replace('<a ', '<a class="' . esc_attr($custom_class) . '" ', $existing_link);
 				}
-			}
 
-			$custom_links[] = $existing_link;
+				$custom_links[] = $existing_link;
+			}
 		} else {
 			// Create a new link with our class
 			$link = get_term_link($tag, 'post_tag');
