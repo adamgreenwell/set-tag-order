@@ -1341,20 +1341,41 @@ add_action('wp_ajax_add-tag', function() {
 });
 
 /**
- * Block Editor Integration
+ * Register and enqueue scripts and styles for the plugin
  *
- * Enqueue block editor JavaScript if block editor is enabled
- *
- * @since 1.0.0
- * @param string $hook Current admin page
- * @return void
+ * @since 1.0.5
  */
-add_action('admin_enqueue_scripts', function($hook) {
-	if (!in_array($hook, ['post.php', 'post-new.php'])) {
-		return;
-	}
+function sto_register_assets() {
+	// Register the main script
+	wp_register_script(
+		'tag-order-script',
+		plugins_url('/assets/js/set-tag-order.js', __FILE__),
+		['wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data', 'wp-i18n'],
+		filemtime(plugin_dir_path(__FILE__) . 'assets/js/set-tag-order.js'),
+		[
+			'in_footer' => true,
+			'strategy' => 'defer'
+		]
+	);
 
-	$post_type = get_post_type();
+	// Register the main styles
+	wp_register_style(
+		'tag-order-panel-styles',
+		plugins_url('/assets/css/tag-order-panels.css', __FILE__),
+		[],
+		filemtime(plugin_dir_path(__FILE__) . 'assets/css/tag-order-panels.css')
+	);
+}
+add_action('init', 'sto_register_assets');
+
+/**
+ * Enqueue Block Editor assets
+ *
+ * @since 1.0.5
+ */
+add_action('enqueue_block_editor_assets', function() {
+	global $post_type;
+	
 	if (!$post_type || !in_array($post_type, get_post_types_with_tags())) {
 		return;
 	}
@@ -1362,23 +1383,9 @@ add_action('admin_enqueue_scripts', function($hook) {
 	// Only load Block Editor assets when Block Editor is detected
 	if (sto_is_using_block_editor()) {
 		sto_debug_log("Loading Block Editor assets for post type: {$post_type}");
-
-		// Enqueue the main script
-		wp_enqueue_script(
-			'tag-order-script',
-			plugins_url('/assets/js/set-tag-order.js', __FILE__),
-			['wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data'],
-			'1.0.5',
-			true
-		);
-
-		// Enqueue custom CSS for panel ordering
-		wp_enqueue_style(
-			'tag-order-panel-styles',
-			plugins_url('/assets/css/tag-order-panels.css', __FILE__),
-			[],
-			'1.0.5'
-		);
+		
+		wp_enqueue_script('tag-order-script');
+		wp_enqueue_style('tag-order-panel-styles');
 	}
 });
 
