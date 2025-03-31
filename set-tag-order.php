@@ -1392,7 +1392,7 @@ add_action('enqueue_block_editor_assets', function() {
 /**
  * Load jQuery UI for Classic Editor
  *
- * @since 1.0.4
+ * @since 1.0.5
  * @param string $hook Current admin page
  * @return void
  */
@@ -1404,8 +1404,10 @@ add_action('admin_enqueue_scripts', function($hook) {
 	// Only load Classic Editor assets when Classic Editor is detected
 	if (!sto_is_using_block_editor()) {
 		sto_debug_log('Loading jQuery UI for Classic Editor');
-		wp_enqueue_script('jquery-ui-sortable');
-		wp_enqueue_script('jquery-ui-autocomplete');
+		
+		// Register and enqueue jQuery UI scripts with proper dependencies
+		wp_enqueue_script('jquery-ui-sortable', ['jquery-ui-core', 'jquery-ui-mouse']);
+		wp_enqueue_script('jquery-ui-autocomplete', ['jquery-ui-core', 'jquery-ui-widget', 'jquery-ui-position']);
 	}
 }, 20);
 
