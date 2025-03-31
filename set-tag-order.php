@@ -71,6 +71,11 @@ add_action('load-post.php', function() {
  * @return WP_REST_Response|null
  */
 add_filter('rest_prepare_post', function($response, $post, $request) {
+	// Verify nonce for REST API requests
+	if (!isset($_SERVER['HTTP_X_WP_NONCE']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_SERVER['HTTP_X_WP_NONCE'])), 'wp_rest')) {
+		return $response;
+	}
+
 	if (!empty($post->ID) && $request->get_method() === 'GET') {
 		// Only process for individual post requests with an edit context
 		if ($request->get_param('context') === 'edit') {
