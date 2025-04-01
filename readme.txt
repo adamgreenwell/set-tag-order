@@ -2,8 +2,8 @@
 
 Contributors: Adam Greenwell
 
-Stable tag: 1.0.3
-Tested up to: 6.7.2
+Stable tag: 1.0.6
+Tested up to: 6.7
 Requires at least: 5.2
 Requires PHP: 7.4
 Requires at least: 7.4
@@ -26,6 +26,14 @@ displayed in the set order using the built-in WordPress "the_tags()" function or
 Documentation pending
 
 == Changelog ==
+
+= 1.0.6 =
+*Release Date - 31 March 2025*
+
+* Added improved support for block-based themes like Twenty Twenty-Five
+* Fixed issue with tags not displaying in post-terms blocks
+* Improved DOM manipulation for more reliable class and separator handling
+* Implemented custom block renderer for better tag order control
 
 = 1.0.5 =
 *Release Date - 19 February 2025*
