@@ -1009,12 +1009,13 @@ function render_custom_tag_box($post) {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
         }
         .tag-list li:hover {
             background: #e5e5e5;
         }
         .ntdelbutton {
-            left: 36px;
+            left: 24px;
             border: none;
             background: none;
             color: #a00;
