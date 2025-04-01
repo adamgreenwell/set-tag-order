@@ -13,7 +13,7 @@
  * @wordpress-plugin
  * Plugin Name: Set Tag Order
  * Description: Allows setting custom order for post tags in the block editor
- * Version:     1.0.5
+ * Version:     1.0.6
  * Author:      Adam Greenwell
  * License:     GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -34,8 +34,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return void
  */
 function tag_order_debug_log( $message ) {
-	if ( get_option( 'tag_order_debug_mode', false ) ) {
-		error_log( '[Set Tag Order] ' . $message );
+	if ( defined( 'WP_DEBUG' ) && WP_DEBUG && get_option( 'tag_order_debug_mode', false ) ) {
+		// Use WordPress's built-in logging function when available
+		if ( function_exists( 'wp_privacy_anonymize_data' ) ) {
+			error_log( wp_privacy_anonymize_data( 'message', '[Set Tag Order] ' . $message ) );
+		} else {
+			error_log( '[Set Tag Order] ' . $message );
+		}
 	}
 }
 
@@ -45,6 +50,11 @@ function tag_order_debug_log( $message ) {
  * @since 1.0.4
  */
 add_action('load-post.php', function() {
+	// Verify nonce for post loading
+	if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'load-post')) {
+		return;
+	}
+
 	if (isset($_GET['post'])) {
 		$post_id = intval($_GET['post']);
 		synchronize_tag_order_on_load($post_id);
@@ -61,6 +71,11 @@ add_action('load-post.php', function() {
  * @return WP_REST_Response|null
  */
 add_filter('rest_prepare_post', function($response, $post, $request) {
+	// Verify nonce for REST API requests
+	if (!isset($_SERVER['HTTP_X_WP_NONCE']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_SERVER['HTTP_X_WP_NONCE'])), 'wp_rest')) {
+		return $response;
+	}
+
 	if (!empty($post->ID) && $request->get_method() === 'GET') {
 		// Only process for individual post requests with an edit context
 		if ($request->get_param('context') === 'edit') {
@@ -211,9 +226,9 @@ add_filter('term_links-post_tag', function($links) {
 					// No existing class, add ours
 					$existing_link = str_replace('<a ', '<a class="' . esc_attr($custom_class) . '" ', $existing_link);
 				}
-			}
 
-			$custom_links[] = $existing_link;
+				$custom_links[] = $existing_link;
+			}
 		} else {
 			// Create a new link with our class
 			$link = get_term_link($tag, 'post_tag');
@@ -227,9 +242,162 @@ add_filter('term_links-post_tag', function($links) {
 }, 20, 1);
 
 /**
- * Add a filter for the_tags output
+ * Filter Block Editor tag separator
  *
- * Applies custom separator from plugin settings
+ * @since 1.0.5
+ * @param string $separator The separator text
+ * @return string Modified separator text
+ */
+function set_tag_order_filter_block_separator($separator) {
+	$custom_separator = get_option('tag_order_separator', '');
+	
+	sto_debug_log("Filter wp_block_post_terms_separator called - Separator: '$separator', Custom: '$custom_separator'");
+	
+	if (!empty($custom_separator)) {
+		return $custom_separator;
+	}
+	return $separator;
+}
+add_filter('wp_block_post_terms_separator', 'set_tag_order_filter_block_separator', 10, 1);
+
+/**
+ * Filter Block Editor post-terms block output
+ *
+ * @since 1.0.6
+ * @param string $block_content The block content
+ * @param array  $block         The full block, including name and attributes
+ * @return string Modified block content
+ */
+function set_tag_order_filter_post_terms_block($block_content, $block) {
+    // Our custom renderer is now handling the main tag output
+    // This filter should not add additional classes as they're already added in the renderer
+    
+    // Only process post-terms blocks
+    if (empty($block['blockName']) || $block['blockName'] !== 'core/post-terms') {
+        return $block_content;
+    }
+    
+    $custom_separator = get_option('tag_order_separator', '');
+    $custom_class = get_option('tag_order_class', 'tag');
+    
+    // Log the taxonomy type from block attributes
+    if (!empty($block['attrs']) && !empty($block['attrs']['term'])) {
+        sto_debug_log("Filter render_block called for post-terms with taxonomy: '{$block['attrs']['term']}', Custom separator: '$custom_separator', Custom class: '$custom_class'");
+    } else {
+        sto_debug_log("Filter render_block called for post-terms - Custom separator: '$custom_separator', Custom class: '$custom_class'");
+    }
+    
+    // Debugging: Log the complete block content
+    sto_debug_log("Block content: " . $block_content);
+    
+    // We're no longer modifying classes here since they're added in the renderer
+    return $block_content;
+}
+add_filter('render_block', 'set_tag_order_filter_post_terms_block', 10, 2);
+
+/**
+ * Custom renderer for post-terms block
+ */
+function sto_render_post_terms_block($attributes, $content, $block) {
+    $post_id = isset($block->context['postId']) ? $block->context['postId'] : 0;
+    if (!$post_id) {
+        global $post;
+        $post_id = $post ? $post->ID : 0;
+    }
+    
+    $term_type = isset($attributes['term']) ? $attributes['term'] : 'post_tag';
+    sto_debug_log("Custom post-terms renderer called for post $post_id with term type $term_type");
+    
+    if ($term_type !== 'post_tag') {
+        // If not rendering tags, let WordPress handle it
+        return $content;
+    }
+    
+    // Get our ordered tags using our existing function
+    $tags = get_ordered_post_tags($post_id);
+    
+    if (!$tags || empty($tags)) {
+        sto_debug_log("No tags found for post $post_id in custom renderer");
+        return $content; // Return original content if no tags
+    }
+    
+    $tag_count = count($tags);
+    sto_debug_log("Custom renderer found $tag_count tags for post $post_id");
+    
+    // Get separator and class settings
+    $separator = get_option('tag_order_separator', '');
+    if (empty($separator) && isset($attributes['separator'])) {
+        $separator = $attributes['separator'];
+    }
+    
+    // Get custom classes - parse into array to prevent duplication
+    $custom_class = get_option('tag_order_class', 'tag');
+    $custom_classes = explode(' ', $custom_class);
+    $custom_classes = array_map('trim', $custom_classes);
+    $custom_classes = array_filter($custom_classes);
+    
+    // Start building output
+    $classes = 'taxonomy-post_tag wp-block-post-terms';
+    if (!empty($attributes['className'])) {
+        $classes .= ' ' . $attributes['className'];
+    }
+    
+    $html = '<div class="' . esc_attr($classes) . '">';
+    
+    foreach ($tags as $index => $tag) {
+        if ($index > 0 && !empty($separator)) {
+            $html .= '<span class="wp-block-post-terms__separator">' . esc_html($separator) . '</span>';
+        }
+        
+        $tag_link = get_term_link($tag, 'post_tag');
+        if (!is_wp_error($tag_link)) {
+            $html .= '<a href="' . esc_url($tag_link) . '" class="' . esc_attr(implode(' ', $custom_classes)) . '" rel="tag">' . 
+                     esc_html($tag->name) . '</a>';
+        }
+    }
+    
+    $html .= '</div>';
+    sto_debug_log("Custom renderer generated HTML for tags");
+    
+    return $html;
+}
+
+/**
+ * Add debug filter to track get_the_terms
+ * 
+ * @since 1.0.6
+ */
+function sto_debug_get_the_terms($terms, $post_id, $taxonomy) {
+	if ($taxonomy === 'post_tag') {
+		sto_debug_log("get_the_terms filter for post $post_id with taxonomy $taxonomy returned " . 
+			(is_array($terms) ? count($terms) : 'non-array') . " terms");
+		
+		if (is_array($terms) && !empty($terms)) {
+			$term_names = array_map(function($term) { 
+				return $term->name; 
+			}, $terms);
+			sto_debug_log("Terms: " . implode(', ', $term_names));
+		} else {
+			sto_debug_log("No terms found or terms is not an array");
+		}
+	}
+	return $terms;
+}
+add_filter('get_the_terms', 'sto_debug_get_the_terms', 999, 3);
+
+/**
+ * Add debug filter for post-terms block attributes
+ */
+function sto_debug_pre_render_block($pre_render, $parsed_block) {
+	if (!empty($parsed_block['blockName']) && $parsed_block['blockName'] === 'core/post-terms') {
+		sto_debug_log("Pre-render for post-terms block: " . json_encode($parsed_block['attrs']));
+	}
+	return $pre_render;
+}
+add_filter('pre_render_block', 'sto_debug_pre_render_block', 10, 2);
+
+/**
+ * Filter the_tags output to apply custom separator
  *
  * @since 1.0.3
  * @param string $output HTML output
@@ -238,25 +406,68 @@ add_filter('term_links-post_tag', function($links) {
  * @param string $after  Text to display after
  * @return string Modified HTML output
  */
-add_filter('the_tags', function($output, $before, $sep, $after) {
+function set_tag_order_filter_the_tags($output, $before, $sep, $after) {
 	$custom_separator = get_option('tag_order_separator', '');
+
+	sto_debug_log("Filter the_tags called - Default separator: '$sep', Custom: '$custom_separator'");
 
 	// Only modify if we have a custom separator
 	if (!empty($custom_separator) && !empty($output)) {
-		// Replace default separator with our custom one
-		// First find what separator was actually used (it might not be $sep)
+		// Store original for debugging
+		$original_output = $output;
+		
+		// Classic Editor handling
 		$first_tag_pos = strpos($output, '</a>') + 4;
 		$next_tag_pos = strpos($output, '<a', $first_tag_pos);
 
-		if ($first_tag_pos !== false && $next_tag_pos !== false) {
-			$actual_sep = substr($output, $first_tag_pos, $next_tag_pos - $first_tag_pos);
-			// Replace all instances of this separator with our custom one
-			$output = str_replace($actual_sep, '<span class="tag-separator">' . esc_html($custom_separator) . '</span>', $output);
+		if ($next_tag_pos !== false) {
+			// Find the actual separator used
+			$actual_separator = substr($output, $first_tag_pos, $next_tag_pos - $first_tag_pos);
+			$actual_separator = trim($actual_separator);
+			
+			sto_debug_log("Actual separator found: '$actual_separator'");
+			
+			// Replace the actual separator with our custom one
+			$output = str_replace(
+				$actual_separator,
+				'<span class="tag-separator">' . esc_html($custom_separator) . '</span>',
+				$output
+			);
+			
+			// Log whether the replacement was successful
+			if ($original_output !== $output) {
+				sto_debug_log("Custom separator applied to the_tags output");
+			} else {
+				sto_debug_log("Warning: Failed to replace separator in the_tags output");
+			}
 		}
 	}
 
 	return $output;
-}, 20, 4);
+}
+add_filter('the_tags', 'set_tag_order_filter_the_tags', 10, 4);
+
+/**
+ * Add custom CSS for tag separators
+ *
+ * @since 1.0.5
+ * @return void
+ */
+function set_tag_order_custom_css() {
+	$custom_separator = get_option('tag_order_separator', '');
+	if (!empty($custom_separator)) {
+		$custom_css = '
+			.tag-separator {
+				display: inline-block;
+				margin: 0 0.25em;
+				font-size: 1.2em;
+				color: #999;
+			}
+		';
+		wp_add_inline_style('wp-block-library', $custom_css);
+	}
+}
+add_action('wp_enqueue_scripts', 'set_tag_order_custom_css');
 
 /**
  * Synchronize tag order metadata whenever post tags are updated
@@ -381,15 +592,6 @@ add_action('updated_post_meta', function($meta_id, $post_id, $meta_key, $meta_va
 
 // Include dependencies
 require_once plugin_dir_path( __FILE__ ) . 'inc/admin/settings.php';
-require_once plugin_dir_path( __FILE__ ) . 'update/github-updater.php';
-
-/**
- * Initialize GitHub updater
- *
- * @since 1.0.2
- */
-$updater = new Set_Tag_Order_GitHub_Updater( __FILE__ );
-$updater->set_github_info( 'adamgreenwell', 'set-tag-order' );
 
 /**
  * Plugin debugging function
@@ -643,7 +845,7 @@ function the_ordered_post_tags($before = '', $sep = '', $after = '', $post_id = 
 
 	$html .= $after;
 
-	echo $html;
+	echo wp_kses_post($html);
 }
 
 /**
@@ -654,7 +856,11 @@ function the_ordered_post_tags($before = '', $sep = '', $after = '', $post_id = 
  */
 function sto_ajax_set_editor_mode() {
 	$user_id = get_current_user_id();
-	check_ajax_referer('set_tag_order_editor_mode');
+	
+	// Verify nonce with proper sanitization
+	if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'set_tag_order_editor_mode')) {
+		wp_send_json_error('Invalid nonce');
+	}
 
 	if (isset($_POST['mode']) && $_POST['mode'] === 'classic') {
 		// Store in user meta
@@ -695,7 +901,7 @@ function sto_improved_editor_detection_js() {
                 var xhr = new XMLHttpRequest();
                 xhr.open('POST', ajaxurl);
                 xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-                xhr.send('action=set_tag_order_editor_mode&mode=block&_wpnonce=<?php echo wp_create_nonce('set_tag_order_editor_mode'); ?>');
+                xhr.send('action=set_tag_order_editor_mode&mode=block&_wpnonce=<?php echo esc_js(wp_create_nonce('set_tag_order_editor_mode')); ?>');
 
                 // When using Block Editor, make sure our debug logging knows
                 wp.domReady(function() {
@@ -712,7 +918,7 @@ function sto_improved_editor_detection_js() {
                     var xhr = new XMLHttpRequest();
                     xhr.open('POST', ajaxurl);
                     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-                    xhr.send('action=set_tag_order_editor_mode&mode=classic&_wpnonce=<?php echo wp_create_nonce('set_tag_order_editor_mode'); ?>');
+                    xhr.send('action=set_tag_order_editor_mode&mode=classic&_wpnonce=<?php echo esc_js(wp_create_nonce('set_tag_order_editor_mode')); ?>');
                 }
             }
         })();
@@ -803,12 +1009,13 @@ function render_custom_tag_box($post) {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
         }
         .tag-list li:hover {
             background: #e5e5e5;
         }
         .ntdelbutton {
-            left: 36px;
+            left: 24px;
             border: none;
             background: none;
             color: #a00;
@@ -871,7 +1078,8 @@ function render_custom_tag_box($post) {
                 } else {
                     // Create new tag
                     wp.ajax.post('add-tag', {
-                        tag_name: tagName
+                        tag_name: tagName,
+                        _wpnonce: '<?php echo wp_create_nonce('add_tag_nonce'); ?>'
                     }).done(function(response) {
                         addTag(response.term_id, response.name);
                         existingTags.push({
@@ -1048,8 +1256,9 @@ function sto_sync_tag_order_on_rest_update($prepared_post, $request) {
  * @return void
  */
 add_action('save_post', function($post_id) {
+	// Verify nonce with proper sanitization
 	if (!isset($_POST['tag_order_meta_box_nonce']) ||
-	    !wp_verify_nonce($_POST['tag_order_meta_box_nonce'], 'tag_order_meta_box')) {
+	    !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['tag_order_meta_box_nonce'])), 'tag_order_meta_box')) {
 		return;
 	}
 
@@ -1064,7 +1273,7 @@ add_action('save_post', function($post_id) {
 	if (isset($_POST['post_tags'])) {
 		// Make sure we're getting numeric IDs only
 		$tag_ids = array_filter(
-			explode(',', sanitize_text_field($_POST['post_tags'])),
+			explode(',', sanitize_text_field(wp_unslash($_POST['post_tags']))),
 			'is_numeric'
 		);
 
@@ -1085,7 +1294,7 @@ add_action('save_post', function($post_id) {
 	}
 
 	if (isset($_POST['tag_order'])) {
-		$tag_order = sanitize_text_field($_POST['tag_order']);
+		$tag_order = sanitize_text_field(wp_unslash($_POST['tag_order']));
 		update_post_meta(
 			$post_id,
 			'_tag_order',
@@ -1102,7 +1311,17 @@ add_action('save_post', function($post_id) {
  * @return void
  */
 add_action('wp_ajax_add-tag', function() {
-	$tag_name = sanitize_text_field($_POST['tag_name']);
+	// Verify nonce with proper sanitization
+	if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'add_tag_nonce')) {
+		wp_send_json_error('Invalid nonce');
+	}
+
+	// Validate and sanitize tag name
+	if (!isset($_POST['tag_name']) || empty($_POST['tag_name'])) {
+		wp_send_json_error('Tag name is required');
+	}
+
+	$tag_name = sanitize_text_field(wp_unslash($_POST['tag_name']));
 	$tag = wp_insert_term($tag_name, 'post_tag');
 
 	if (is_wp_error($tag)) {
@@ -1123,20 +1342,41 @@ add_action('wp_ajax_add-tag', function() {
 });
 
 /**
- * Block Editor Integration
+ * Register and enqueue scripts and styles for the plugin
  *
- * Enqueue block editor JavaScript if block editor is enabled
- *
- * @since 1.0.0
- * @param string $hook Current admin page
- * @return void
+ * @since 1.0.5
  */
-add_action('admin_enqueue_scripts', function($hook) {
-	if (!in_array($hook, ['post.php', 'post-new.php'])) {
-		return;
-	}
+function sto_register_assets() {
+	// Register the main script
+	wp_register_script(
+		'tag-order-script',
+		plugins_url('/assets/js/set-tag-order.js', __FILE__),
+		['wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data', 'wp-i18n'],
+		filemtime(plugin_dir_path(__FILE__) . 'assets/js/set-tag-order.js'),
+		[
+			'in_footer' => true,
+			'strategy' => 'defer'
+		]
+	);
 
-	$post_type = get_post_type();
+	// Register the main styles
+	wp_register_style(
+		'tag-order-panel-styles',
+		plugins_url('/assets/css/tag-order-panels.css', __FILE__),
+		[],
+		filemtime(plugin_dir_path(__FILE__) . 'assets/css/tag-order-panels.css')
+	);
+}
+add_action('init', 'sto_register_assets');
+
+/**
+ * Enqueue Block Editor assets
+ *
+ * @since 1.0.5
+ */
+add_action('enqueue_block_editor_assets', function() {
+	global $post_type;
+	
 	if (!$post_type || !in_array($post_type, get_post_types_with_tags())) {
 		return;
 	}
@@ -1144,30 +1384,16 @@ add_action('admin_enqueue_scripts', function($hook) {
 	// Only load Block Editor assets when Block Editor is detected
 	if (sto_is_using_block_editor()) {
 		sto_debug_log("Loading Block Editor assets for post type: {$post_type}");
-
-		// Enqueue the main script
-		wp_enqueue_script(
-			'tag-order-script',
-			plugins_url('/assets/js/set-tag-order.js', __FILE__),
-			['wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data'],
-			'1.0.5',
-			true
-		);
-
-		// Enqueue custom CSS for panel ordering
-		wp_enqueue_style(
-			'tag-order-panel-styles',
-			plugins_url('/assets/css/tag-order-panels.css', __FILE__),
-			[],
-			'1.0.5'
-		);
+		
+		wp_enqueue_script('tag-order-script');
+		wp_enqueue_style('tag-order-panel-styles');
 	}
 });
 
 /**
  * Load jQuery UI for Classic Editor
  *
- * @since 1.0.4
+ * @since 1.0.5
  * @param string $hook Current admin page
  * @return void
  */
@@ -1179,8 +1405,10 @@ add_action('admin_enqueue_scripts', function($hook) {
 	// Only load Classic Editor assets when Classic Editor is detected
 	if (!sto_is_using_block_editor()) {
 		sto_debug_log('Loading jQuery UI for Classic Editor');
-		wp_enqueue_script('jquery-ui-sortable');
-		wp_enqueue_script('jquery-ui-autocomplete');
+		
+		// Register and enqueue jQuery UI scripts with proper dependencies
+		wp_enqueue_script('jquery-ui-sortable', ['jquery-ui-core', 'jquery-ui-mouse']);
+		wp_enqueue_script('jquery-ui-autocomplete', ['jquery-ui-core', 'jquery-ui-widget', 'jquery-ui-position']);
 	}
 }, 20);
 
@@ -1266,3 +1494,20 @@ function synchronize_tag_order_on_load($post_id) {
 		sto_debug_log("Synchronized tag order on load for post $post_id: " . implode(',', $new_order));
 	}
 }
+
+/**
+ * Direct hook into post-terms block rendering
+ */
+function sto_override_post_terms_block() {
+    // Unregister the core block pattern
+    unregister_block_type('core/post-terms');
+    
+    // Re-register with our custom render callback
+    register_block_type('core/post-terms', array(
+        'api_version' => 2,
+        'render_callback' => 'sto_render_post_terms_block'
+    ));
+    
+    sto_debug_log("Registered custom post-terms block renderer");
+}
+add_action('init', 'sto_override_post_terms_block', 20); // Higher priority to override core

@@ -20,8 +20,8 @@
  */
 add_action( 'admin_menu', function () {
 	add_options_page(
-		'Tag Order Settings',
-		'Tag Order',
+		'Set Tag Order Settings',
+		'Set Tag Order',
 		'manage_options',
 		'tag-order-settings',
 		'render_tag_order_settings'
