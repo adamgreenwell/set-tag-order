@@ -1,25 +1,17 @@
 <?php
 /**
- * Set Tag Order
- *
- * A WordPress plugin that allows users to set a custom display order for post tags
- * in both the Block Editor and Classic Editor.
- *
- * @package    SetTagOrder
- * @author     Adam Greenwell
- * @copyright  2024 Adam Greenwell
- * @license    GPL-2.0-or-later
- *
- * @wordpress-plugin
  * Plugin Name: Set Tag Order
+ * Plugin URI: https://github.com/adamgreenwell/set-tag-order
  * Description: Allows setting custom order for post tags in the block editor
- * Version:     1.0.6
- * Author:      Adam Greenwell
- * License:     GPL-2.0-or-later
- * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: set-tag-order
+ * Version:     1.1.0
  * Requires at least: 5.2
  * Requires PHP: 7.4
+ * Author: Adam Greenwell
+ * Author URI: https://adamgreenwell.com
+ * License: GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: set-tag-order
+ * Domain Path: /languages
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
