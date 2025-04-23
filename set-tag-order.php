@@ -250,9 +250,10 @@ add_filter('term_links-post_tag', function($links) {
  */
 function set_tag_order_filter_block_separator($separator) {
 	$custom_separator = get_option('tag_order_separator', '');
-	
+
 	sto_debug_log("Filter wp_block_post_terms_separator called - Separator: '$separator', Custom: '$custom_separator'");
-	
+
+	// Only modify if we have a custom separator
 	if (!empty($custom_separator)) {
 		return $custom_separator;
 	}
@@ -942,188 +943,19 @@ function render_custom_tag_box($post) {
 	$tag_order = get_post_meta($post->ID, '_tag_order', true);
 	$ordered_ids = $tag_order ? explode(',', $tag_order) : [];
 
-	wp_nonce_field('tag_order_meta_box', 'tag_order_meta_box_nonce');
-	?>
-    <div class="tagsdiv" id="custom-tags">
-        <div class="jaxtag">
-            <input type="text"
-                   id="new-tag-input"
-                   class="newtag form-input-tip"
-                   size="16"
-                   autocomplete="off"
-                   value="" />
-            <input type="button"
-                   class="button tagadd"
-                   value="Add" />
-        </div>
-
-        <div class="tagchecklist">
-            <ul id="sortable-tags" class="tag-list">
-				<?php foreach ($post_tags as $tag): ?>
-                    <li data-tag-id="<?php echo esc_attr($tag->term_id); ?>"
-                        data-tag-name="<?php echo esc_attr($tag->name); ?>">
-						<?php echo esc_html($tag->name); ?>
-                        <button type="button"
-                                class="ntdelbutton"
-                                data-tag-id="<?php echo esc_attr($tag->term_id); ?>">
-                            <span class="remove-tag-icon" aria-hidden="true"></span>
-                        </button>
-                    </li>
-				<?php endforeach; ?>
-            </ul>
-        </div>
-
-        <input type="hidden"
-               name="tag_order"
-               id="tag-order-input"
-               value="<?php echo esc_attr($tag_order); ?>" />
-        <input type="hidden"
-               name="post_tags"
-               id="post-tags-input"
-               value="<?php echo esc_attr(implode(',', wp_list_pluck($post_tags, 'term_id'))); ?>" />
-
-        <div class="ajaxtag hide-if-no-js">
-            <p><?php esc_html_e('Start typing to search existing tags, or add new ones.'); ?></p>
-        </div>
-    </div>
-
-    <style>
-        .jaxtag {
-            margin-top: 15px;
-        }
-        .tagchecklist {
-            margin-left: 0;
-            margin-top: 15px;
-        }
-        .tag-list {
-            margin: 0;
-            padding: 0;
-        }
-        .tag-list li {
-            padding: 8px 8px 8px 30px;
-            margin: 4px 0;
-            background: #f0f0f0;
-            border: 1px solid #ddd;
-            cursor: move;
-            list-style: none;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: relative;
-        }
-        .tag-list li:hover {
-            background: #e5e5e5;
-        }
-        .ntdelbutton {
-            left: 24px;
-            border: none;
-            background: none;
-            color: #a00;
-            cursor: pointer;
-            padding: 0 4px;
-        }
-        .ntdelbutton:hover {
-            color: #dc3232;
-        }
-        .remove-tag-icon::before {
-            content: "×";
-        }
-        #new-tag-input {
-            width: 180px;
-            max-width: 100%;
-        }
-    </style>
-
-    <script>
-        jQuery(document).ready(function($) {
-            var tagInput = $('#new-tag-input');
-            var existingTags = <?php echo json_encode(array_map(function($tag) {
-				return ['id' => $tag->term_id, 'text' => $tag->name];
-			}, $all_tags)); ?>;
-
-            // Initialize sortable
-            $('#sortable-tags').sortable({
-                update: function(event, ui) {
-                    updateTagOrder();
-                }
-            });
-
-            // Initialize tag autocomplete
-            tagInput.autocomplete({
-                source: existingTags.map(tag => tag.text),
-                minLength: 2,
-                select: function(event, ui) {
-                    event.preventDefault();
-                    var selectedTag = existingTags.find(tag => tag.text === ui.item.value);
-                    if (selectedTag) {
-                        addTag(selectedTag.id, selectedTag.text);
-                    }
-                    tagInput.val('');
-                }
-            });
-
-            // Add tag button click
-            $('.tagadd').click(function() {
-                var tagName = tagInput.val().trim();
-                if (!tagName) return;
-
-                // Check if tag exists
-                var existingTag = existingTags.find(tag =>
-                    tag.text.toLowerCase() === tagName.toLowerCase()
-                );
-
-                if (existingTag) {
-                    addTag(existingTag.id, existingTag.text);
-                    tagInput.val('');
-                } else {
-                    // Create new tag
-                    wp.ajax.post('add-tag', {
-                        tag_name: tagName,
-                        _wpnonce: '<?php echo wp_create_nonce('add_tag_nonce'); ?>'
-                    }).done(function(response) {
-                        addTag(response.term_id, response.name);
-                        existingTags.push({
-                            id: response.term_id,
-                            text: response.name
-                        });
-                        tagInput.val('');
-                    });
-                }
-            });
-
-            // Remove tag button click
-            $(document).on('click', '.ntdelbutton', function() {
-                $(this).parent().remove();
-                updateTagOrder();
-            });
-
-            function addTag(id, name) {
-                // Check if tag already exists
-                if ($(`#sortable-tags li[data-tag-id="${id}"]`).length) {
-                    return;
-                }
-
-                $('#sortable-tags').append(`
-                <li data-tag-id="${id}" data-tag-name="${name}">
-                    ${name}
-                    <button type="button" class="ntdelbutton" data-tag-id="${id}">
-                        <span class="remove-tag-icon" aria-hidden="true"></span>
-                    </button>
-                </li>
-            `);
-                updateTagOrder();
-            }
-
-            function updateTagOrder() {
-                var order = $('#sortable-tags').sortable('toArray', {
-                    attribute: 'data-tag-id'
-                });
-                $('#tag-order-input').val(order.join(','));
-                $('#post-tags-input').val(order.join(','));
-            }
+    // Sort post tags according to the saved order
+    if (!empty($ordered_ids) && !empty($post_tags)) {
+        $ordered_tags_map = array_flip($ordered_ids);
+        usort($post_tags, function ($a, $b) use ($ordered_tags_map) {
+            $pos_a = isset($ordered_tags_map[$a->term_id]) ? $ordered_tags_map[$a->term_id] : PHP_INT_MAX;
+            $pos_b = isset($ordered_tags_map[$b->term_id]) ? $ordered_tags_map[$b->term_id] : PHP_INT_MAX;
+            return $pos_a <=> $pos_b;
         });
-    </script>
-	<?php
+    }
+
+	// Include the partial template file
+	// Pass necessary variables to the partial's scope
+	include plugin_dir_path(__FILE__) . 'partials/custom-tag-box-partial.php';
 }
 
 /**
@@ -1398,19 +1230,81 @@ add_action('enqueue_block_editor_assets', function() {
  * @return void
  */
 add_action('admin_enqueue_scripts', function($hook) {
-	if (!in_array($hook, ['post.php', 'post-new.php'])) {
-		return;
-	}
+    global $pagenow, $post;
+    
+    // Check if we are on a post edit screen
+    if (!in_array($hook, ['post.php', 'post-new.php'])) {
+        return;
+    }
 
-	// Only load Classic Editor assets when Classic Editor is detected
-	if (!sto_is_using_block_editor()) {
-		sto_debug_log('Loading jQuery UI for Classic Editor');
-		
-		// Register and enqueue jQuery UI scripts with proper dependencies
-		wp_enqueue_script('jquery-ui-sortable', ['jquery-ui-core', 'jquery-ui-mouse']);
-		wp_enqueue_script('jquery-ui-autocomplete', ['jquery-ui-core', 'jquery-ui-widget', 'jquery-ui-position']);
-	}
-}, 20);
+    // Get the current screen and post type
+    $screen = get_current_screen();
+    $post_type = null;
+    if ($screen && isset($screen->post_type)) {
+        $post_type = $screen->post_type;
+    } else {
+        // Fallback: Try to determine post type from post object (less reliable here)
+        $current_post_id = null;
+        if ($post) {
+            $current_post_id = $post->ID;
+        } elseif (isset($_GET['post'])) {
+            $current_post_id = absint($_GET['post']);
+        } elseif (isset($_POST['post_ID'])) {
+            $current_post_id = absint($_POST['post_ID']);
+        }
+
+        if ($current_post_id) {
+            $post_type = get_post_type($current_post_id);
+        } else {
+             return; // Cannot determine post type
+        }
+    }
+    
+    if (!$post_type) {
+        return;
+    }
+
+    // Removed problematic check: !post_type_supports($post_type, 'post-tag')
+    // Rationale: If we reach this point, the meta box is supposed to be added,
+    // which already implies tag support for the post type.
+    // This check seems to fail intermittently due to hook timing.
+
+    // Only load for Classic Editor
+    if (function_exists('sto_is_using_block_editor') && sto_is_using_block_editor()) {
+        return;
+    }
+
+    // Enqueue CSS
+    wp_enqueue_style(
+        'set-tag-order-admin-css', 
+        plugin_dir_url(__FILE__) . 'css/set-tag-order-admin.css', 
+        [], 
+        filemtime(plugin_dir_path(__FILE__) . 'css/set-tag-order-admin.css') // Versioning
+    );
+
+    // Enqueue JS
+    wp_enqueue_script(
+        'set-tag-order-admin-js', 
+        plugin_dir_url(__FILE__) . 'js/set-tag-order-admin.js', 
+        ['jquery', 'jquery-ui-sortable', 'wp-util'], // Add dependencies
+        filemtime(plugin_dir_path(__FILE__) . 'js/set-tag-order-admin.js'), // Versioning
+        true // Load in footer
+    );
+
+    // Prepare data for JavaScript
+    $all_tags = get_tags(['hide_empty' => false]);
+    $tags_for_js = array_map(function($tag) {
+        return ['id' => $tag->term_id, 'text' => $tag->name];
+    }, $all_tags);
+
+    // Pass data to the script
+    wp_localize_script('set-tag-order-admin-js', 'setTagOrderAdmin', [
+        'allTags' => $tags_for_js,
+        // We might need a nonce here if the JS performs AJAX actions later
+        // 'nonce' => wp_create_nonce('set_tag_order_ajax_nonce') 
+    ]);
+
+}, 20); // Change priority from default 10 to 20
 
 /**
  * Synchronize tag order on post load
