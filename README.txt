@@ -1,5 +1,5 @@
 === Set Tag Order ===
-Contributors: Adam Greenwell
+Contributors: adamgreenwell
 Tags: taxonomy, post tags, block editor, classic editor
 Requires at least: 5.2
 Tested up to: 6.8
