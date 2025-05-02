@@ -9,7 +9,7 @@ jQuery(document).ready(function($) {
     var sortableList = $('#sortable-tags');
     var tagOrderInput = $('#tag-order-input');
     var postTagsInput = $('#post-tags-input');
-    var allTags = setTagOrderAdmin.allTags || []; // Get tags passed via wp_localize_script
+    var allTags = settagordAdminData.allTags || []; // Renamed prefix
 
     // 1. Initialize Sortable
     if (sortableList.length > 0) {
@@ -70,17 +70,38 @@ jQuery(document).ready(function($) {
             updateTagOrder(); // Update hidden inputs
             tagInput.val(''); // Clear input
         } else {
-            // Option 1: Add visually, but requires server-side creation on save (handled by WP core/plugin save logic)
-            // Add a temporary visual representation, maybe mark it as 'new'
-            // addTagToList(null, tagName, true); // Pass a flag indicating it's a new tag
-            // updateTagOrder();
-            // tagInput.val('');
-
-            // Option 2: Create tag via AJAX (More complex, but better UX)
-            // This requires a separate AJAX handler in your PHP
-            console.warn('Tag not found. Adding new tags via this button is not implemented in this example.');
-            // You might want to disable the 'Add' button if the tag doesn't exist
-            // or provide feedback that the tag will be created on post save.
+            // Tag doesn't exist. AJAX creation is not implemented here.
+            // The PHP AJAX handler set_tag_order_add_tag exists but isn't called from this script.
+            // We could implement the AJAX call here:
+            /*
+            $.ajax({
+                url: ajaxurl, // Needs ajaxurl passed via wp_localize_script
+                type: 'POST',
+                data: {
+                    action: 'settagord_add_tag',
+                    tag_name: tagName,
+                    _wpnonce: settagordAdminData.addTagNonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Add the new tag ID to our allTags array (optional)
+                        allTags.push({ id: response.data.term_id, text: response.data.name }); 
+                        // Update datalist
+                        $('<option />').val(response.data.name).appendTo(dataList);
+                        // Add tag to the list
+                        addTagToList(response.data.term_id, response.data.name);
+                        updateTagOrder();
+                        tagInput.val('');
+                    } else {
+                        alert('Error adding tag: ' + response.data);
+                    }
+                },
+                error: function() {
+                    alert('AJAX error trying to add tag.');
+                }
+            });
+            */
+            console.warn('Tag \'' + tagName + '\' not found. AJAX creation not implemented in Classic Editor UI.');
             tagInput.val(''); // Clear input for now
         }
     });

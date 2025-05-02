@@ -76,12 +76,12 @@
             if (!postTags.length) {
                 // Clear the order if there are no tags
                 setTagOrder([]);
-                editPost({meta: {...meta, _tag_order: ''}});
+                editPost({meta: {...meta, _settagord: ''}});
                 return;
             }
 
             // Get the saved order if it exists
-            const savedOrder = meta?._tag_order ? meta._tag_order.split(',').map(Number) : [];
+            const savedOrder = meta?._settagord ? meta._settagord.split(',').map(Number) : [];
 
             if (initialLoad && savedOrder.length > 0) {
                 // On initial load, respect the saved order from meta
@@ -113,11 +113,11 @@
                     });
 
                     setTagOrder(updatedOrder);
-                    editPost({meta: {...meta, _tag_order: updatedOrder.join(',')}});
+                    editPost({meta: {...meta, _settagord: updatedOrder.join(',')}});
                 } else {
                     // If tag order is empty but we have tags, initialize it
                     setTagOrder([...postTags]);
-                    editPost({meta: {...meta, _tag_order: postTags.join(',')}});
+                    editPost({meta: {...meta, _settagord: postTags.join(',')}});
                 }
             }
         }, [postTags, tags, initialLoad]);
@@ -158,7 +158,7 @@
                     [newOrder[newIndex], newOrder[currentIndex]];
 
                 setTagOrder(newOrder);
-                editPost({meta: {...meta, _tag_order: newOrder.join(',')}});
+                editPost({meta: {...meta, _settagord: newOrder.join(',')}});
             }
         };
 

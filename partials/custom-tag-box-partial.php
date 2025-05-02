@@ -11,10 +11,10 @@ if (!defined('ABSPATH')) {
 }
 
 $post_tags = get_the_tags($post->ID) ?: [];
-$tag_order = get_post_meta($post->ID, '_tag_order', true) ?: '';
+$tag_order = get_post_meta($post->ID, '_settagord', true) ?: '';
 
 // Expects $post, $all_tags, $post_tags, $tag_order, $ordered_ids to be available in the scope.
-wp_nonce_field('tag_order_meta_box', 'tag_order_meta_box_nonce');
+wp_nonce_field('settagord_meta_box', 'settagord_meta_box_nonce');
 ?>
 <div class="tagsdiv" id="custom-tags">
     <div class="jaxtag">
@@ -52,7 +52,7 @@ wp_nonce_field('tag_order_meta_box', 'tag_order_meta_box_nonce');
     </div>
 
     <input type="hidden"
-           name="tag_order"
+           name="settagord"
            id="tag-order-input"
            value="<?php echo esc_attr($tag_order); ?>" />
     <input type="hidden"
