@@ -1196,8 +1196,10 @@ add_action('admin_enqueue_scripts', function($hook) {
         if ($post) {
             $current_post_id = $post->ID;
         } elseif (isset($_GET['post'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading GET for post ID context for enqueuing scripts.
             $current_post_id = absint($_GET['post']);
         } elseif (isset($_POST['post_ID'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Reading POST for post ID context for enqueuing scripts.
             $current_post_id = absint($_POST['post_ID']);
         }
 
