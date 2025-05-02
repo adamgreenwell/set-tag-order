@@ -1,6 +1,6 @@
 # Set Tag Order
 
-This plugin adds a Tag Order panel to the WordPress Block Editor that allows arranging tags in a specific order. Tags are displayed in the set order using the built-in WordPress "the_tags()" function or can be called using "the_ordered_post_tags()".
+This plugin adds a Tag Order panel to the WordPress Block Editor that allows arranging tags in a specific order. Tags are displayed in the set order using the built-in WordPress "the_tags()" function or can be called using "settagord_the_ordered_post_tags()" function.
 
 ## Description
 
@@ -25,6 +25,11 @@ The Set Tag Order plugin enhances the WordPress tagging system by allowing users
 After installation, you can access the settings under Settings > Set Tag Order.
 
 ## Changelog
+
+### 1.1.1
+* Fixed JavaScript enqueueing to use WordPress standards
+* Refactor function names to prevent conflicts with other plugins
+* Remove restricted verbs from function names
 
 ### 1.1.0
 * Refactored the plugin to follow WordPress plugin development guidelines.
