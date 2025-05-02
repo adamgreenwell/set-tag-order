@@ -598,13 +598,23 @@ function settagord_is_using_block_editor() {
 	// Check if this is an AJAX request for the heartbeat API
 	if (defined('DOING_AJAX') && DOING_AJAX) {
 		// Heartbeat is used by both editors, so we need additional checks
-		if (isset($_POST['action']) && $_POST['action'] === 'heartbeat') {
-			// If we have a specific Block Editor field in the data, it's Block Editor
-			if (isset($_POST['data']) && isset($_POST['data']['wp-refresh-post-lock'])) {
-				return true;
-			}
+		$action = isset($_POST['action']) ? sanitize_key($_POST['action']) : ''; // Sanitize action
+
+		// Check for heartbeat action AND verify its nonce
+		if ($action === 'heartbeat') { 
+		    // Verify the heartbeat nonce before accessing $_POST['data']
+		    if (isset($_POST['_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_nonce'])), 'heartbeat-nonce')) {
+			    // Note: We are only checking isset() here, not using the value directly.
+			    if (isset($_POST['data']) && isset($_POST['data']['wp-refresh-post-lock'])) { 
+				    return true; // Detected Block Editor via heartbeat data
+			    }
+            } else {
+                // Nonce failed or missing for heartbeat, assume not Block Editor context.
+                return false;
+            }
 		}
-		return false; // Other AJAX is likely from Classic Editor
+		// If AJAX action is not heartbeat, it's likely Classic Editor or other non-heartbeat AJAX
+		return false; 
 	}
 
 	// Check if we're loading post.php or post-new.php
