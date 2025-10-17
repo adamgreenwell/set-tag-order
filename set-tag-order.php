@@ -3,7 +3,7 @@
  * Plugin Name: Set Tag Order
  * Plugin URI: https://github.com/adamgreenwell/set-tag-order
  * Description: Allows setting custom order for post tags in the block editor
- * Version:     1.1.1
+ * Version:     1.1.2
  * Requires at least: 5.2
  * Requires PHP: 7.4
  * Author: Adam Greenwell
@@ -254,36 +254,32 @@ add_filter('wp_block_post_terms_separator', 'settagord_filter_block_separator', 
  * Filter Block Editor post-terms block output
  *
  * @since 1.0.6
- * @param string $block_content The block content
- * @param array  $block         The full block, including name and attributes
+ * @param string   $block_content The block content
+ * @param array    $parsed_block  The full block, including name and attributes
+ * @param WP_Block $instance      The block instance
  * @return string Modified block content
  */
-function settagord_filter_post_terms_block($block_content, $block) {
-    // Our custom renderer is now handling the main tag output
-    // This filter should not add additional classes as they're already added in the renderer
-    
+function settagord_filter_post_terms_block($block_content, $parsed_block, $instance) {
     // Only process post-terms blocks
-    if (empty($block['blockName']) || $block['blockName'] !== 'core/post-terms') {
+    if (empty($parsed_block['blockName']) || $parsed_block['blockName'] !== 'core/post-terms') {
         return $block_content;
     }
-    
-    $custom_separator = get_option('settagord_separator', '');
-    $custom_class = get_option('settagord_class', 'tag');
-    
-    // Log the taxonomy type from block attributes
-    if (!empty($block['attrs']) && !empty($block['attrs']['term'])) {
-        settagord_debug_log("Filter render_block called for post-terms with taxonomy: '{$block['attrs']['term']}', Custom separator: '$custom_separator', Custom class: '$custom_class'");
-    } else {
-        settagord_debug_log("Filter render_block called for post-terms - Custom separator: '$custom_separator', Custom class: '$custom_class'");
+
+    // Only process if this is for the post_tag taxonomy
+    $term_type = isset($parsed_block['attrs']['term']) ? $parsed_block['attrs']['term'] : 'post_tag';
+    if ($term_type !== 'post_tag') {
+        return $block_content;
     }
-    
-    // Debugging: Log the complete block content
-    settagord_debug_log("Block content: " . $block_content);
-    
-    // We're no longer modifying classes here since they're added in the renderer
-    return $block_content;
+
+    // Get block attributes
+    $attributes = isset($parsed_block['attrs']) ? $parsed_block['attrs'] : array();
+
+    // Call our custom renderer with the correct parameters
+    $custom_content = settagord_render_post_terms_block($attributes, $block_content, $instance);
+
+    return $custom_content;
 }
-add_filter('render_block', 'settagord_filter_post_terms_block', 10, 2);
+add_filter('render_block', 'settagord_filter_post_terms_block', 10, 3);
 
 /**
  * Custom renderer for post-terms block
@@ -1339,19 +1335,3 @@ function settagord_synchronize_on_load($post_id) {
 	}
 }
 
-/**
- * Direct hook into post-terms block rendering
- */
-function settagord_override_post_terms_block() {
-    // Unregister the core block pattern
-    unregister_block_type('core/post-terms');
-    
-    // Re-register with our custom render callback
-    register_block_type('core/post-terms', array(
-        'api_version' => 2,
-        'render_callback' => 'settagord_render_post_terms_block'
-    ));
-    
-    settagord_debug_log("Registered custom post-terms block renderer");
-}
-add_action('init', 'settagord_override_post_terms_block', 20); // Higher priority to override core
