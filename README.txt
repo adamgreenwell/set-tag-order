@@ -3,7 +3,7 @@ Contributors: adamgreenwell
 Tags: taxonomy, post tags, block editor, classic editor
 Requires at least: 5.2
 Tested up to: 6.8
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -32,6 +32,9 @@ The Set Tag Order plugin enhances the WordPress tagging system by allowing users
 After installation, you can access the settings under Settings > Set Tag Order.
 
 == Changelog ==
+
+= 1.1.2 =
+* Fix conflict with core/post-terms default block
 
 = 1.1.1 =
 * Fixed JavaScript enqueueing to use WordPress standards

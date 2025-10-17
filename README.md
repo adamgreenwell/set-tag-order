@@ -26,6 +26,9 @@ After installation, you can access the settings under Settings > Set Tag Order.
 
 ## Changelog
 
+### 1.1.2
+* Fix conflict with core/post-terms default block when using full site editing capable theme
+
 ### 1.1.1
 * Fixed JavaScript enqueueing to use WordPress standards
 * Refactor function names to prevent conflicts with other plugins
