@@ -17,6 +17,8 @@
     "yoast/phpunit-polyfills": "^2.0"
   },
   "scripts": {
+    "build": "bash bin/build-release.sh",
+    "deploy:svn": "bash bin/deploy-svn.sh",
     "test:setup": "bash bin/setup-tests.sh",
     "test": "bash bin/run-tests-from-wp-root.sh",
     "test:integration": "bash bin/run-tests-from-wp-root.sh --testsuite integration"

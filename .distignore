@@ -2,9 +2,13 @@
 /.git
 /.github
 /bin
+/build
+/dist
 /docs
 /tests
 /vendor
+README.md
+README.txt
 composer.json
 composer.lock
 phpunit.xml
