@@ -1,0 +1,74 @@
+.jaxtag {
+    margin-top: 15px;
+}
+.tagchecklist {
+    margin-left: 0;
+    margin-top: 15px;
+}
+.tag-list {
+    margin: 0;
+    padding: 0;
+}
+.tag-list li {
+    padding: 8px 8px 8px 30px;
+    margin: 4px 0;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    cursor: move;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+.tag-list li:hover {
+    background: #e5e5e5;
+}
+.ntdelbutton {
+    left: 24px;
+    border: none;
+    background: none;
+    color: #a00;
+    cursor: pointer;
+    padding: 0 4px;
+    /* Add a negative margin to visually align it better */
+    margin-right: -4px; 
+}
+.ntdelbutton:hover {
+    color: #dc3232;
+}
+.remove-tag-icon::before {
+    content: "\00d7"; /* Unicode multiplication sign */
+    font-size: 1.2em;
+    line-height: 1;
+    vertical-align: middle;
+}
+#new-tag-input {
+    width: 180px;
+    max-width: 100%;
+}
+
+/* Styling for Select2 */
+.select2-container--default .select2-selection--multiple {
+    border: 1px solid #ddd;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 0 5px;
+    margin-right: 5px;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    color: #a00;
+    cursor: pointer;
+    float: right;
+    margin-left: 5px;
+    font-weight: bold;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+    color: #dc3232;
+}
