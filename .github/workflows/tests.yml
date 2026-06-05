@@ -1,0 +1,94 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+    paths:
+      - '**'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    paths:
+      - '**'
+      - '.github/workflows/tests.yml'
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  WP_TESTS_DIR: /tmp/wordpress-tests-lib
+  WP_CORE_DIR: /tmp/wordpress
+
+jobs:
+  integration:
+    name: PHP ${{ matrix.php }} / WordPress ${{ matrix.wordpress }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '7.4'
+            wordpress: '7.0'
+          - php: '8.3'
+            wordpress: '7.0'
+          - php: '8.3'
+            wordpress: 'latest'
+
+    services:
+      mysql:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress_test
+          MYSQL_USER: settagorder
+          MYSQL_PASSWORD: settagorder
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip, mysqli
+          coverage: none
+          tools: composer:v2
+
+      - name: Install test suite prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y subversion default-mysql-client
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Install WordPress test suite
+        run: |
+          bash bin/install-wp-tests.sh wordpress_test settagorder settagorder 127.0.0.1:3306 ${{ matrix.wordpress }} true
+        env:
+          WP_TESTS_DIR: ${{ env.WP_TESTS_DIR }}
+          WP_CORE_DIR: ${{ env.WP_CORE_DIR }}
+
+      - name: Run integration tests
+        run: composer test
+        env:
+          WP_TESTS_DIR: ${{ env.WP_TESTS_DIR }}
+          WP_CORE_DIR: ${{ env.WP_CORE_DIR }}

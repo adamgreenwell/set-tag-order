@@ -1,0 +1,27 @@
+{
+  "name": "adamgreenwell/set-tag-order",
+  "description": "Set Tag Order is a WordPress plugin for custom post tag display ordering in the Block Editor and Classic Editor.",
+  "type": "wordpress-plugin",
+  "license": "GPL-2.0-or-later",
+  "authors": [
+    {
+      "name": "Adam Greenwell",
+      "email": "me@adamgreenwell.com"
+    }
+  ],
+  "require": {
+    "php": ">=7.4"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.6",
+    "yoast/phpunit-polyfills": "^2.0"
+  },
+  "scripts": {
+    "test:setup": "bash bin/setup-tests.sh",
+    "test": "bash bin/run-tests-from-wp-root.sh",
+    "test:integration": "bash bin/run-tests-from-wp-root.sh --testsuite integration"
+  },
+  "config": {
+    "allow-plugins": {}
+  }
+}
