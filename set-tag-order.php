@@ -216,8 +216,9 @@ add_filter('term_links-post_tag', function($links) {
 					$existing_link = str_replace('<a ', '<a class="' . esc_attr($custom_class) . '" ', $existing_link);
 				}
 
-				$custom_links[] = $existing_link;
 			}
+
+			$custom_links[] = $existing_link;
 		} else {
 			// Create a new link with our class
 			$link = get_term_link($tag, 'post_tag');
@@ -502,19 +503,13 @@ add_action('set_object_terms', function($post_id, $terms, $tt_ids, $taxonomy, $a
 		return;
 	}
 
-	// Get term IDs from term_taxonomy IDs
-	$term_ids = [];
-	if (!empty($tt_ids)) {
-		global $wpdb;
-		$tt_ids_str = implode(',', array_map('intval', $tt_ids));
-		$term_ids = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT term_id FROM $wpdb->term_taxonomy WHERE term_taxonomy_id IN (%s) AND taxonomy = %s",
-				$tt_ids_str,
-				$taxonomy
-			)
-		);
+	// Get the currently assigned term IDs after WordPress has updated relationships.
+	$term_ids = wp_get_object_terms($post_id, 'post_tag', ['fields' => 'ids']);
+	if (is_wp_error($term_ids)) {
+		settagord_debug_log("Unable to sync tag order for post $post_id: " . $term_ids->get_error_message());
+		return;
 	}
+	$term_ids = array_map('intval', $term_ids);
 
 	// If we're replacing terms (not appending)
 	if (!$append) {
@@ -1334,4 +1329,3 @@ function settagord_synchronize_on_load($post_id) {
 		settagord_debug_log("Synchronized tag order on load for post $post_id: " . implode(',', $new_order));
 	}
 }
-
