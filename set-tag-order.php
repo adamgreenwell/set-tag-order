@@ -34,6 +34,57 @@ function settagord_debug_log( $message ) {
 }
 
 /**
+ * Get saved tag order, migrating the legacy meta key when present.
+ *
+ * @since 1.1.3
+ * @param int $post_id Post ID.
+ * @return string Comma-separated tag order.
+ */
+function settagord_get_tag_order_meta( $post_id ) {
+	$tag_order = get_post_meta( $post_id, '_settagord', true );
+
+	if ( '' !== $tag_order ) {
+		return $tag_order;
+	}
+
+	$legacy_tag_order = get_post_meta( $post_id, '_tag_order', true );
+
+	if ( '' === $legacy_tag_order ) {
+		return '';
+	}
+
+	update_post_meta( $post_id, '_settagord', $legacy_tag_order );
+	delete_post_meta( $post_id, '_tag_order' );
+
+	return $legacy_tag_order;
+}
+
+/**
+ * Save tag order metadata and remove the pre-1.1 prefixed meta key.
+ *
+ * @since 1.1.3
+ * @param int    $post_id   Post ID.
+ * @param string $tag_order Comma-separated tag order.
+ * @return void
+ */
+function settagord_update_tag_order_meta( $post_id, $tag_order ) {
+	update_post_meta( $post_id, '_settagord', $tag_order );
+	delete_post_meta( $post_id, '_tag_order' );
+}
+
+/**
+ * Delete both current and legacy tag order metadata.
+ *
+ * @since 1.1.3
+ * @param int $post_id Post ID.
+ * @return void
+ */
+function settagord_delete_tag_order_meta( $post_id ) {
+	delete_post_meta( $post_id, '_settagord' );
+	delete_post_meta( $post_id, '_tag_order' );
+}
+
+/**
  * Hook to synchronize tag order when post is loaded in editor
  *
  * @since 1.0.4
@@ -255,12 +306,12 @@ add_filter('wp_block_post_terms_separator', 'settagord_filter_block_separator', 
  * Filter Block Editor post-terms block output
  *
  * @since 1.0.6
- * @param string   $block_content The block content
- * @param array    $parsed_block  The full block, including name and attributes
- * @param WP_Block $instance      The block instance
+ * @param string        $block_content The block content
+ * @param array         $parsed_block  The full block, including name and attributes
+ * @param WP_Block|null $instance      The block instance, unavailable before WordPress 5.9
  * @return string Modified block content
  */
-function settagord_filter_post_terms_block($block_content, $parsed_block, $instance) {
+function settagord_filter_post_terms_block($block_content, $parsed_block, $instance = null) {
     // Only process post-terms blocks
     if (empty($parsed_block['blockName']) || $parsed_block['blockName'] !== 'core/post-terms') {
         return $block_content;
@@ -284,8 +335,13 @@ add_filter('render_block', 'settagord_filter_post_terms_block', 10, 3);
 
 /**
  * Custom renderer for post-terms block
+ *
+ * @param array         $attributes Block attributes.
+ * @param string        $content    Existing block content.
+ * @param WP_Block|null $block      Block instance, unavailable before WordPress 5.9.
+ * @return string Rendered block content.
  */
-function settagord_render_post_terms_block($attributes, $content, $block) {
+function settagord_render_post_terms_block($attributes, $content, $block = null) {
     $post_id = isset($block->context['postId']) ? $block->context['postId'] : 0;
     if (!$post_id) {
         global $post;
@@ -495,7 +551,7 @@ add_action('set_object_terms', function($post_id, $terms, $tt_ids, $taxonomy, $a
 	settagord_debug_log("set_object_terms called for post $post_id with " . count($tt_ids) . " tags");
 
 	// Get the current tag order
-	$current_order = get_post_meta($post_id, '_settagord', true);
+	$current_order = settagord_get_tag_order_meta($post_id);
 	$current_order_array = $current_order ? explode(',', $current_order) : [];
 
 	if (empty($current_order_array) && empty($tt_ids)) {
@@ -515,7 +571,7 @@ add_action('set_object_terms', function($post_id, $terms, $tt_ids, $taxonomy, $a
 	if (!$append) {
 		if (empty($term_ids)) {
 			// All tags were removed, clear the order
-			delete_post_meta($post_id, '_settagord');
+			settagord_delete_tag_order_meta($post_id);
 			settagord_debug_log("All tags removed, cleared order for post $post_id");
 			return;
 		}
@@ -538,7 +594,7 @@ add_action('set_object_terms', function($post_id, $terms, $tt_ids, $taxonomy, $a
 		}
 
 		// Update the meta
-		update_post_meta($post_id, '_settagord', implode(',', $new_order));
+		settagord_update_tag_order_meta($post_id, implode(',', $new_order));
 		settagord_debug_log("Updated tag order for post $post_id: " . implode(',', $new_order));
 	} else {
 		// Appending terms, add the new ones to the existing order
@@ -550,7 +606,7 @@ add_action('set_object_terms', function($post_id, $terms, $tt_ids, $taxonomy, $a
 			}
 		}
 
-		update_post_meta($post_id, '_settagord', implode(',', $new_order));
+		settagord_update_tag_order_meta($post_id, implode(',', $new_order));
 		settagord_debug_log("Appended to tag order for post $post_id: " . implode(',', $new_order));
 	}
 }, 10, 6);
@@ -707,7 +763,7 @@ function settagord_order_tags( $tags, $post_id ) {
 		return $tags;
 	}
 
-	$tag_order = get_post_meta( $post_id, '_settagord', true );
+	$tag_order = settagord_get_tag_order_meta( $post_id );
 	settagord_debug_log( 'Tag Order for post ' . $post_id . ': ' . $tag_order );
 
 	if ( empty( $tag_order ) ) {
@@ -770,6 +826,19 @@ function settagord_get_ordered_post_tags( $post_id = null ) {
 	return settagord_order_tags( $tags, $post_id );
 }
 
+if ( ! function_exists( 'get_ordered_post_tags' ) ) {
+	/**
+	 * Legacy template helper for retrieving ordered post tags.
+	 *
+	 * @since 1.1.3
+	 * @param int|null $post_id Post ID or null for current post.
+	 * @return array|false Array of tag objects or false if no tags or unsupported post type.
+	 */
+	function get_ordered_post_tags( $post_id = null ) {
+		return settagord_get_ordered_post_tags( $post_id );
+	}
+}
+
 /**
  * Display post tags in custom order with specified formatting
  *
@@ -824,6 +893,22 @@ function settagord_the_ordered_post_tags($before = '', $sep = '', $after = '', $
 	echo wp_kses_post($html);
 }
 
+if ( ! function_exists( 'the_ordered_post_tags' ) ) {
+	/**
+	 * Legacy template helper for displaying ordered post tags.
+	 *
+	 * @since 1.1.3
+	 * @param string $before  HTML to display before the list of tags.
+	 * @param string $sep     HTML to display between tags.
+	 * @param string $after   HTML to display after the list of tags.
+	 * @param int    $post_id Post ID, defaults to current post.
+	 * @return void
+	 */
+	function the_ordered_post_tags( $before = '', $sep = '', $after = '', $post_id = 0 ) {
+		settagord_the_ordered_post_tags( $before, $sep, $after, $post_id );
+	}
+}
+
 /**
  * AJAX handler for setting editor mode
  *
@@ -863,7 +948,7 @@ add_action('wp_ajax_settagord_editor_mode', 'settagord_ajax_set_editor_mode');
 function settagord_render_custom_tag_box($post) {
 	$all_tags = get_tags(['hide_empty' => false]);
 	$post_tags = get_the_tags($post->ID) ?: [];
-	$tag_order = get_post_meta($post->ID, '_settagord', true);
+	$tag_order = settagord_get_tag_order_meta($post->ID);
 	$ordered_ids = $tag_order ? explode(',', $tag_order) : [];
 
     // Sort post tags according to the saved order
@@ -960,7 +1045,7 @@ function settagord_sync_tag_order_on_rest_update($prepared_post, $request) {
 	settagord_debug_log("REST API update for post {$post_id} with tags: " . implode(',', $new_tags));
 
 	// Get current tag order
-	$current_order = get_post_meta($post_id, '_settagord', true);
+	$current_order = settagord_get_tag_order_meta($post_id);
 	$ordered_ids = !empty($current_order) ? explode(',', $current_order) : [];
 
 	// Nothing to do if no new tags and no existing order
@@ -970,7 +1055,7 @@ function settagord_sync_tag_order_on_rest_update($prepared_post, $request) {
 
 	// If removing all tags, clear the order
 	if (empty($new_tags)) {
-		delete_post_meta($post_id, '_settagord');
+		settagord_delete_tag_order_meta($post_id);
 		settagord_debug_log("REST API: Cleared tag order for post {$post_id} (all tags removed)");
 		return $prepared_post;
 	}
@@ -995,7 +1080,7 @@ function settagord_sync_tag_order_on_rest_update($prepared_post, $request) {
 	}
 
 	// Update the tag order meta
-	update_post_meta($post_id, '_settagord', implode(',', $new_order));
+	settagord_update_tag_order_meta($post_id, implode(',', $new_order));
 	settagord_debug_log("REST API: Updated tag order for post {$post_id}: " . implode(',', $new_order));
 
 	return $prepared_post;
@@ -1050,11 +1135,7 @@ add_action('save_post', function($post_id) {
 
 	if (isset($_POST['settagord'])) {
 		$tag_order = sanitize_text_field(wp_unslash($_POST['settagord']));
-		update_post_meta(
-			$post_id,
-			'_settagord',
-			$tag_order
-		);
+		settagord_update_tag_order_meta( $post_id, $tag_order );
 		settagord_debug_log('Saving settagord: ' . $tag_order);
 	}
 }, 10, 1);
@@ -1277,12 +1358,12 @@ function settagord_synchronize_on_load($post_id) {
 	$post_tags = wp_get_post_terms($post_id, 'post_tag', ['fields' => 'ids']);
 	if (empty($post_tags)) {
 		// No tags, make sure order is empty too
-		delete_post_meta($post_id, '_settagord');
+		settagord_delete_tag_order_meta($post_id);
 		return;
 	}
 
 	// Get saved tag order
-	$tag_order = get_post_meta($post_id, '_settagord', true);
+	$tag_order = settagord_get_tag_order_meta($post_id);
 	$ordered_ids = $tag_order ? explode(',', $tag_order) : [];
 
 	// Check if we need to synchronize
@@ -1331,7 +1412,7 @@ function settagord_synchronize_on_load($post_id) {
 			}
 		}
 
-		update_post_meta($post_id, '_settagord', implode(',', $new_order));
+		settagord_update_tag_order_meta($post_id, implode(',', $new_order));
 		settagord_debug_log("Synchronized tag order on load for post $post_id: " . implode(',', $new_order));
 	}
 }

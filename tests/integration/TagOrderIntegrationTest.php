@@ -53,6 +53,18 @@ class TagOrderIntegrationTest extends WP_Ajax_UnitTestCase {
 		$this->assertSame( array( 'Gamma', 'Alpha', 'Beta' ), $this->ordered_tag_names( $tags ) );
 	}
 
+	public function test_get_ordered_post_tags_reads_legacy_tag_order_meta_and_migrates_it() {
+		list( $post_id, $term_ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta', 'Gamma' ) );
+		$legacy_order               = implode( ',', array( $term_ids[2], $term_ids[0], $term_ids[1] ) );
+		delete_post_meta( $post_id, '_settagord' );
+		update_post_meta( $post_id, '_tag_order', $legacy_order );
+
+		$tags = settagord_get_ordered_post_tags( $post_id );
+
+		$this->assertSame( array( 'Gamma', 'Alpha', 'Beta' ), $this->ordered_tag_names( $tags ) );
+		$this->assertSame( $legacy_order, get_post_meta( $post_id, '_settagord', true ) );
+	}
+
 	public function test_synchronize_on_load_removes_stale_ids_and_appends_new_tags() {
 		list( $post_id, $term_ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta' ) );
 		$gamma                      = wp_insert_term( 'Gamma', 'post_tag' );
@@ -89,6 +101,17 @@ class TagOrderIntegrationTest extends WP_Ajax_UnitTestCase {
 		$this->assertSame( '', get_post_meta( $post_id, '_settagord', true ) );
 	}
 
+	public function test_removing_all_tags_clears_legacy_saved_order() {
+		list( $post_id, $term_ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta' ) );
+		delete_post_meta( $post_id, '_settagord' );
+		update_post_meta( $post_id, '_tag_order', implode( ',', $term_ids ) );
+
+		wp_set_post_terms( $post_id, array(), 'post_tag', false );
+
+		$this->assertSame( '', get_post_meta( $post_id, '_settagord', true ) );
+		$this->assertSame( '', get_post_meta( $post_id, '_tag_order', true ) );
+	}
+
 	public function test_term_links_filter_keeps_links_when_custom_separator_uses_default_class() {
 		list( $post_id, $term_ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta' ) );
 		update_post_meta( $post_id, '_settagord', implode( ',', array_reverse( $term_ids ) ) );
@@ -99,6 +122,48 @@ class TagOrderIntegrationTest extends WP_Ajax_UnitTestCase {
 		setup_postdata( $GLOBALS['post'] );
 
 		$html = get_the_term_list( $post_id, 'post_tag', '', '<span>|</span>', '' );
+
+		$this->assertStringContainsString( 'Beta', $html );
+		$this->assertStringContainsString( 'Alpha', $html );
+		$this->assertLessThan( strpos( $html, 'Alpha' ), strpos( $html, 'Beta' ) );
+	}
+
+	public function test_post_terms_block_filter_accepts_two_argument_render_block_calls() {
+		list( $post_id, $term_ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta' ) );
+		update_post_meta( $post_id, '_settagord', implode( ',', array_reverse( $term_ids ) ) );
+
+		$GLOBALS['post'] = get_post( $post_id );
+		setup_postdata( $GLOBALS['post'] );
+
+		$html = settagord_filter_post_terms_block(
+			'',
+			array(
+				'blockName' => 'core/post-terms',
+				'attrs'     => array(
+					'term' => 'post_tag',
+				),
+			)
+		);
+
+		$this->assertStringContainsString( 'Beta', $html );
+		$this->assertStringContainsString( 'Alpha', $html );
+		$this->assertLessThan( strpos( $html, 'Alpha' ), strpos( $html, 'Beta' ) );
+	}
+
+	public function test_legacy_template_helpers_remain_available() {
+		list( $post_id, $term_ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta' ) );
+		update_post_meta( $post_id, '_settagord', implode( ',', array_reverse( $term_ids ) ) );
+
+		$this->assertTrue( function_exists( 'get_ordered_post_tags' ) );
+		$this->assertTrue( function_exists( 'the_ordered_post_tags' ) );
+		$this->assertSame(
+			array( 'Beta', 'Alpha' ),
+			$this->ordered_tag_names( get_ordered_post_tags( $post_id ) )
+		);
+
+		ob_start();
+		the_ordered_post_tags( '', ', ', '', $post_id );
+		$html = ob_get_clean();
 
 		$this->assertStringContainsString( 'Beta', $html );
 		$this->assertStringContainsString( 'Alpha', $html );
