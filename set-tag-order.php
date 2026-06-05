@@ -1071,6 +1071,11 @@ add_action('wp_ajax_settagord_add_tag', function() {
 		wp_send_json_error('Invalid nonce');
 	}
 
+	$taxonomy = get_taxonomy('post_tag');
+	if (!$taxonomy || !current_user_can($taxonomy->cap->edit_terms)) {
+		wp_send_json_error('You are not allowed to create tags.');
+	}
+
 	// Validate and sanitize tag name
 	if (!isset($_POST['tag_name']) || empty($_POST['tag_name'])) {
 		wp_send_json_error('Tag name is required');
@@ -1239,11 +1244,12 @@ add_action('admin_enqueue_scripts', function($hook) {
         return ['id' => $tag->term_id, 'text' => $tag->name];
     }, $all_tags);
 
-    // Pass data to the script
-    wp_localize_script('settagord-admin-js', 'settagordAdminData', [
-        'allTags' => $tags_for_js,
-        'addTagNonce' => wp_create_nonce('settagord_add_tag_nonce') // Added nonce for add tag AJAX
-    ]);
+	// Pass data to the script
+	wp_localize_script('settagord-admin-js', 'settagordAdminData', [
+		'allTags' => $tags_for_js,
+		'ajaxurl' => admin_url('admin-ajax.php'),
+		'addTagNonce' => wp_create_nonce('settagord_add_tag_nonce') // Added nonce for add tag AJAX
+	]);
 
 }, 20); // Change priority from default 10 to 20
 
