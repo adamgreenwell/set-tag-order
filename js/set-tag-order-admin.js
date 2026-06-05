@@ -65,46 +65,36 @@ jQuery(document).ready(function($) {
             return tag.text.toLowerCase() === tagName.toLowerCase();
         });
 
-        if (existingTag) {
-            addTagToList(existingTag.id, existingTag.text);
-            updateTagOrder(); // Update hidden inputs
-            tagInput.val(''); // Clear input
-        } else {
-            // Tag doesn't exist. AJAX creation is not implemented here.
-            // The PHP AJAX handler set_tag_order_add_tag exists but isn't called from this script.
-            // We could implement the AJAX call here:
-            /*
-            $.ajax({
-                url: ajaxurl, // Needs ajaxurl passed via wp_localize_script
-                type: 'POST',
-                data: {
-                    action: 'settagord_add_tag',
-                    tag_name: tagName,
+	        if (existingTag) {
+	            addTagToList(existingTag.id, existingTag.text);
+	            updateTagOrder(); // Update hidden inputs
+	            tagInput.val(''); // Clear input
+	        } else {
+	            $.ajax({
+	                url: settagordAdminData.ajaxurl,
+	                type: 'POST',
+	                data: {
+	                    action: 'settagord_add_tag',
+	                    tag_name: tagName,
                     _wpnonce: settagordAdminData.addTagNonce
                 },
-                success: function(response) {
-                    if (response.success) {
-                        // Add the new tag ID to our allTags array (optional)
-                        allTags.push({ id: response.data.term_id, text: response.data.name }); 
-                        // Update datalist
-                        $('<option />').val(response.data.name).appendTo(dataList);
-                        // Add tag to the list
-                        addTagToList(response.data.term_id, response.data.name);
-                        updateTagOrder();
-                        tagInput.val('');
-                    } else {
-                        alert('Error adding tag: ' + response.data);
-                    }
-                },
-                error: function() {
-                    alert('AJAX error trying to add tag.');
-                }
-            });
-            */
-            console.warn('Tag \'' + tagName + '\' not found. AJAX creation not implemented in Classic Editor UI.');
-            tagInput.val(''); // Clear input for now
-        }
-    });
+	                success: function(response) {
+	                    if (response.success) {
+	                        allTags.push({id: response.data.term_id, text: response.data.name});
+	                        $('<option />').val(response.data.name).appendTo(dataList);
+	                        addTagToList(response.data.term_id, response.data.name);
+	                        updateTagOrder();
+	                        tagInput.val('');
+	                    } else {
+	                        alert('Error adding tag: ' + (response.data || 'Unknown error'));
+	                    }
+	                },
+	                error: function() {
+	                    alert('AJAX error trying to add tag.');
+	                }
+	            });
+	        }
+	    });
 
     // 4. Remove Tag Button Click (using event delegation)
     if (sortableList.length > 0) {
@@ -148,23 +138,17 @@ jQuery(document).ready(function($) {
 
     // 6. Function to update the hidden input fields
     function updateTagOrder() {
-        var orderedIds = [];
-        var currentTagIds = []; // All tags currently in the list
-        sortableList.find('li').each(function() {
-            var tagId = $(this).data('tag-id');
-            // Only include tags that have a valid ID (existing tags)
-            // New tags might not have an ID until saved.
-            if (tagId && typeof tagId === 'number') { // Check if tagId is a number
-                orderedIds.push(tagId);
-                currentTagIds.push(tagId);
-            }
-            // Handle potentially new tags (if you added them visually without an ID)
-             else if ($(this).data('tag-name')) {
-                 // If adding new tags visually, you need a strategy
-                 // For now, we just record all tag IDs present
-                 if (tagId) { currentTagIds.push(tagId); }
-             }
-        });
+	        var orderedIds = [];
+	        var currentTagIds = []; // All tags currently in the list
+	        sortableList.find('li').each(function() {
+	            var tagId = $(this).data('tag-id');
+	            var numericTagId = parseInt(tagId, 10);
+
+	            if (!isNaN(numericTagId)) {
+	                orderedIds.push(numericTagId);
+	                currentTagIds.push(numericTagId);
+	            }
+	        });
         tagOrderInput.val(orderedIds.join(','));
         postTagsInput.val(currentTagIds.join(',')); // Update this with *all* present tags
     }
