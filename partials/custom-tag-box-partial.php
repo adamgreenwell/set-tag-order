@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 }
 
 $post_tags = get_the_tags($post->ID) ?: [];
-$tag_order = get_post_meta($post->ID, '_settagord', true) ?: '';
+$tag_order = settagord_get_tag_order_meta($post->ID) ?: '';
 
 // Expects $post, $all_tags, $post_tags, $tag_order, $ordered_ids to be available in the scope.
 wp_nonce_field('settagord_meta_box', 'settagord_meta_box_nonce');
