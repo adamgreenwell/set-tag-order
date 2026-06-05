@@ -104,4 +104,57 @@ class TagOrderIntegrationTest extends WP_Ajax_UnitTestCase {
 		$this->assertStringContainsString( 'Alpha', $html );
 		$this->assertLessThan( strpos( $html, 'Alpha' ), strpos( $html, 'Beta' ) );
 	}
+
+	public function test_ajax_add_tag_creates_term_for_authorized_user() {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$_POST['_wpnonce'] = wp_create_nonce( 'settagord_add_tag_nonce' );
+		$_POST['tag_name'] = 'Fresh Tag';
+
+		try {
+			$this->_handleAjax( 'settagord_add_tag' );
+		} catch ( WPAjaxDieContinueException $exception ) {
+			unset( $exception );
+		}
+
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 'Fresh Tag', $response['data']['name'] );
+		$this->assertNotNull( term_exists( 'Fresh Tag', 'post_tag' ) );
+	}
+
+	public function test_ajax_add_tag_requires_term_creation_capability() {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		$_POST['_wpnonce'] = wp_create_nonce( 'settagord_add_tag_nonce' );
+		$_POST['tag_name'] = 'Nope Tag';
+
+		try {
+			$this->_handleAjax( 'settagord_add_tag' );
+		} catch ( WPAjaxDieContinueException $exception ) {
+			unset( $exception );
+		}
+
+		$response = json_decode( $this->_last_response, true );
+		$this->assertFalse( $response['success'] );
+		$this->assertNull( term_exists( 'Nope Tag', 'post_tag' ) );
+	}
+
+	public function test_classic_save_handler_persists_post_tags_and_order() {
+		$post_id = self::factory()->post->create( array( 'post_status' => 'draft' ) );
+		list( , $term_ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta' ) );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+
+		$_POST['settagord_meta_box_nonce'] = wp_create_nonce( 'settagord_meta_box' );
+		$_POST['post_tags']               = implode( ',', array( $term_ids[1], $term_ids[0] ) );
+		$_POST['settagord']                = implode( ',', array( $term_ids[1], $term_ids[0] ) );
+
+		do_action( 'save_post', $post_id, get_post( $post_id ), true );
+
+		$assigned_ids = wp_get_post_terms( $post_id, 'post_tag', array( 'fields' => 'ids' ) );
+		sort( $assigned_ids );
+		$expected_ids = array( $term_ids[0], $term_ids[1] );
+		sort( $expected_ids );
+
+		$this->assertSame( implode( ',', array( $term_ids[1], $term_ids[0] ) ), get_post_meta( $post_id, '_settagord', true ) );
+		$this->assertSame( $expected_ids, $assigned_ids );
+	}
 }
