@@ -26,6 +26,11 @@ After installation, you can access the settings under Settings > Set Tag Order.
 
 ## Changelog
 
+### 1.1.3
+* Add Classic Editor support for creating new tags from the custom tag box.
+* Improve tag order synchronization when tags are added or removed.
+* Add PHPUnit and GitHub Actions coverage for WordPress 7.0 compatibility.
+
 ### 1.1.2
 * Fix conflict with core/post-terms default block when using full site editing capable theme
 
