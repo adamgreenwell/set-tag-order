@@ -1,0 +1,35 @@
+# Development and testing files
+/.git
+/.github
+/bin
+/docs
+/tests
+/vendor
+composer.json
+composer.lock
+phpunit.xml
+phpunit.xml.dist
+.phpunit.result.cache
+
+# WordPress.org SVN directory
+/set-tag-order-svn
+
+# IDE and editor files
+/.idea
+/.vscode
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Local and generated files
+*.log
+*.sql
+*.sqlite
+.env
+.env.*
+.gitignore
+.distignore
