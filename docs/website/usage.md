@@ -6,7 +6,9 @@ Set Tag Order adds ordering control to both WordPress editors. The stored order 
 
 A **Tag Order** panel appears in the document sidebar, directly below the standard **Tags** panel, whenever the post has tags.
 
-The panel lists the post's tags in their display order. Each tag has up and down arrow buttons that move it one position at a time. Moving a tag marks the post as having unsaved changes — the new order is written when you update the post, not before.
+The panel lists the post's tags in their display order. Each tag has up and down arrow buttons that move it one position at a time, and a **Sort A–Z** control re-sorts the whole list alphabetically. Moving a tag marks the post as having unsaved changes — the new order is written when you update the post, not before.
+
+Every move is announced to screen readers, including the tag's new position.
 
 The panel does not manage which tags are applied; the standard Tags panel does that. Add and remove tags there, and the Tag Order panel follows along.
 
@@ -14,7 +16,9 @@ The panel does not manage which tags are applied; the standard Tags panel does t
 
 The standard **Tags** box in the sidebar is replaced with one that supports reordering. It keeps the familiar layout — a text field, an **Add** button, and the list of applied tags.
 
-Drag any tag in the list to move it. The order is recorded as you drag and saved with the post.
+Each tag has up and down arrow buttons, and the whole row can be dragged. Both record the order immediately and save it with the post.
+
+The arrow buttons are the keyboard route — focus follows the tag as it moves, so repeated presses work without re-tabbing. **Sort A–Z** re-sorts everything alphabetically. Before 1.2.0 the box was drag-only, so tag order could not be changed without a mouse.
 
 To add a tag, type in the field and click **Add**. Suggestions from existing tags appear as you type. If the name does not match an existing tag, the tag is created and applied — this requires permission to manage tags, so contributors and authors will see an error. Tags are added one at a time; the comma-separated bulk entry of the core box is not supported.
 

@@ -82,6 +82,32 @@ settagord_the_ordered_post_tags( '<p class="tags">Tagged: ', ', ', '</p>' );
 
 Unprefixed aliases `get_ordered_post_tags()` and `the_ordered_post_tags()` remain available for themes written against pre-1.1 versions. They are defined only if nothing else has claimed the name. Prefer the prefixed names in new code.
 
+## Filters
+
+Three filters let you adjust behaviour without editing the plugin.
+
+```php
+// Show at most five tags, keeping the chosen order.
+add_filter( 'settagord_ordered_tags', function ( $tags ) {
+    return array_slice( $tags, 0, 5 );
+} );
+
+// Use a different separator on one post type.
+add_filter( 'settagord_separator', function ( $separator ) {
+    return is_singular( 'product' ) ? ' / ' : $separator;
+} );
+
+// Add a class on top of whatever is configured.
+add_filter( 'settagord_link_classes', function ( $classes ) {
+    $classes[] = 'is-style-pill';
+    return $classes;
+} );
+```
+
+`settagord_ordered_tags` receives the ordered term objects, the post ID, and the
+unordered originals. It runs for every path that renders tags, so one filter
+covers `the_tags()`, the Post Terms block, and theme code alike.
+
 ## Block Themes
 
 Add a **Post Terms** block to your template and set it to **Tags**. Order, CSS class, and separator all apply.

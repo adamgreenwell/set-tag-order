@@ -1,0 +1,218 @@
+# Copyright (C) 2026 Adam Greenwell
+# This file is distributed under the GPL v2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: Set Tag Order 1.2.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/set-tag-order\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-08-23T15:11:28+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: set-tag-order\n"
+
+#. Plugin Name of the plugin
+#: set-tag-order.php
+#: inc/admin/settings.php:29
+msgid "Set Tag Order"
+msgstr ""
+
+#. Plugin URI of the plugin
+#: set-tag-order.php
+msgid "https://github.com/adamgreenwell/set-tag-order"
+msgstr ""
+
+#. Description of the plugin
+#: set-tag-order.php
+msgid "Allows setting custom order for post tags in the block editor"
+msgstr ""
+
+#. Author of the plugin
+#: set-tag-order.php
+msgid "Adam Greenwell"
+msgstr ""
+
+#. Author URI of the plugin
+#: set-tag-order.php
+msgid "https://adamgreenwell.com"
+msgstr ""
+
+#: inc/admin/settings.php:28
+msgid "Set Tag Order Settings"
+msgstr ""
+
+#: inc/admin/settings.php:68
+msgid "Display Settings"
+msgstr ""
+
+#: inc/admin/settings.php:70
+msgid "Customize how your ordered tags are displayed on your site."
+msgstr ""
+
+#: inc/admin/settings.php:78
+msgid "Tag Separator"
+msgstr ""
+
+#: inc/admin/settings.php:82
+msgid "Character placed between tags. Leave empty to keep whatever separator your theme already uses. Surrounding spaces are trimmed on save; spacing comes from CSS."
+msgstr ""
+
+#: inc/admin/settings.php:91
+msgid "Tag CSS Class"
+msgstr ""
+
+#: inc/admin/settings.php:95
+msgid "CSS class or classes for tag links, separated by spaces. The default \"tag\" means no class is added, matching WordPress behaviour."
+msgstr ""
+
+#: inc/admin/settings.php:104
+msgid "Advanced Settings"
+msgstr ""
+
+#: inc/admin/settings.php:106
+msgid "These settings are intended for development and troubleshooting purposes."
+msgstr ""
+
+#: inc/admin/settings.php:114
+msgid "Debug Mode"
+msgstr ""
+
+#: inc/admin/settings.php:119
+msgid "Enable debug logging"
+msgstr ""
+
+#: inc/admin/settings.php:121
+msgid "When enabled, diagnostic information is written to the error log. Use only for troubleshooting."
+msgstr ""
+
+#: inc/admin/settings.php:164
+msgid "Settings"
+msgstr ""
+
+#: partials/custom-tag-box-partial.php:21
+msgid "Add a tag"
+msgstr ""
+
+#: partials/custom-tag-box-partial.php:31
+msgid "Add"
+msgstr ""
+
+#. translators: %s: tag name
+#: partials/custom-tag-box-partial.php:46
+#: set-tag-order.php:1361
+#: assets/js/set-tag-order.js:224
+#, php-format,js-format
+msgid "Move %s up"
+msgstr ""
+
+#. translators: %s: tag name
+#: partials/custom-tag-box-partial.php:55
+#: set-tag-order.php:1363
+#: assets/js/set-tag-order.js:230
+#, php-format,js-format
+msgid "Move %s down"
+msgstr ""
+
+#. translators: %s: tag name
+#: partials/custom-tag-box-partial.php:66
+#: set-tag-order.php:1365
+#, php-format
+msgid "Remove %s"
+msgstr ""
+
+#: partials/custom-tag-box-partial.php:87
+msgid "Drag tags to reorder, or use the arrow buttons. Start typing above to search existing tags, or add new ones."
+msgstr ""
+
+#: partials/custom-tag-box-partial.php:90
+#: assets/js/set-tag-order.js:240
+msgid "Sort A–Z"
+msgstr ""
+
+#: set-tag-order.php:1016
+#: set-tag-order.php:1176
+msgid "Invalid nonce"
+msgstr ""
+
+#: set-tag-order.php:1086
+msgid "Tags"
+msgstr ""
+
+#: set-tag-order.php:1181
+msgid "You are not allowed to create tags."
+msgstr ""
+
+#: set-tag-order.php:1186
+msgid "Tag name is required"
+msgstr ""
+
+#: set-tag-order.php:1198
+msgid "Error retrieving newly created tag."
+msgstr ""
+
+#. translators: 1: tag name, 2: new position, 3: total number of tags
+#: set-tag-order.php:1367
+#: assets/js/set-tag-order.js:182
+#, php-format,js-format
+msgid "%1$s moved to position %2$s of %3$s"
+msgstr ""
+
+#: set-tag-order.php:1368
+msgid "Already first"
+msgstr ""
+
+#: set-tag-order.php:1369
+msgid "Already last"
+msgstr ""
+
+#: set-tag-order.php:1370
+msgid "Tag order updated"
+msgstr ""
+
+#: set-tag-order.php:1371
+#: assets/js/set-tag-order.js:204
+msgid "Tags sorted alphabetically"
+msgstr ""
+
+#. translators: %s: tag name
+#: set-tag-order.php:1373
+#, php-format
+msgid "%s added"
+msgstr ""
+
+#. translators: %s: tag name
+#: set-tag-order.php:1375
+#, php-format
+msgid "%s removed"
+msgstr ""
+
+#. translators: %s: tag name
+#: set-tag-order.php:1377
+#, php-format
+msgid "%s is already added"
+msgstr ""
+
+#. translators: %s: error message
+#: set-tag-order.php:1379
+#, php-format
+msgid "Error adding tag: %s"
+msgstr ""
+
+#: set-tag-order.php:1380
+msgid "Unknown error"
+msgstr ""
+
+#: set-tag-order.php:1381
+msgid "Could not reach the server to add the tag."
+msgstr ""
+
+#: assets/js/set-tag-order.js:208
+msgid "Add tags to customize their display order."
+msgstr ""
+
+#: assets/js/set-tag-order.js:372
+msgid "Tag Order"
+msgstr ""

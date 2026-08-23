@@ -32,6 +32,18 @@ if ( ! defined( 'SETTAGORD_VERSION' ) ) {
 }
 
 /**
+ * Absolute path to the main plugin file.
+ *
+ * Needed by inc/admin/settings.php, where __FILE__ refers to the include
+ * rather than the plugin, to build the plugin_action_links_ hook name.
+ *
+ * @since 1.2.0
+ */
+if ( ! defined( 'SETTAGORD_PLUGIN_FILE' ) ) {
+	define( 'SETTAGORD_PLUGIN_FILE', __FILE__ );
+}
+
+/**
  * Plugin debugging function
  *
  * Logs debug messages when debug mode is enabled
@@ -254,13 +266,43 @@ add_filter('term_links-post_tag', function($links) {
  * @return array List of class names to add.
  */
 function settagord_get_custom_link_classes() {
-	$custom_class = (string) get_option('settagord_class', 'tag');
+	$custom_class = trim( (string) get_option( 'settagord_class', 'tag' ) );
 
-	if ('' === trim($custom_class) || 'tag' === trim($custom_class)) {
-		return array();
-	}
+	$classes = ( '' === $custom_class || 'tag' === $custom_class )
+		? array()
+		: array_values( array_filter( array_map( 'trim', explode( ' ', $custom_class ) ) ) );
 
-	return array_values(array_filter(array_map('trim', explode(' ', $custom_class))));
+	/**
+	 * Filters the CSS classes added to each tag link.
+	 *
+	 * Returning an empty array leaves the link markup untouched, which is the
+	 * default and matches WordPress core.
+	 *
+	 * @since 1.2.0
+	 * @param array $classes Class names to add.
+	 */
+	return (array) apply_filters( 'settagord_link_classes', $classes );
+}
+
+/**
+ * Get the configured tag separator.
+ *
+ * @since 1.2.0
+ * @return string Separator text, or an empty string when none is configured.
+ */
+function settagord_get_separator() {
+	$separator = (string) get_option( 'settagord_separator', '' );
+
+	/**
+	 * Filters the separator placed between tags.
+	 *
+	 * An empty string means "leave the theme's own separator alone", so
+	 * returning '' here disables separator handling entirely.
+	 *
+	 * @since 1.2.0
+	 * @param string $separator Configured separator.
+	 */
+	return (string) apply_filters( 'settagord_separator', $separator );
 }
 
 /**
@@ -323,7 +365,7 @@ function settagord_filter_post_terms_block($block_content, $parsed_block, $insta
 		return $block_content;
 	}
 
-	$custom_separator = get_option('settagord_separator', '');
+	$custom_separator = settagord_get_separator();
 	if ('' === $custom_separator) {
 		return $block_content;
 	}
@@ -403,7 +445,7 @@ add_filter('pre_render_block', 'settagord_debug_pre_render_block', 10, 2);
  * @return string Modified HTML output
  */
 function settagord_filter_the_tags($output, $before, $sep, $after) {
-	$custom_separator = get_option('settagord_separator', '');
+	$custom_separator = settagord_get_separator();
 
 	if ('' === $custom_separator || !is_string($output) || '' === $output) {
 		return $output;
@@ -502,7 +544,7 @@ function settagord_replace_tag_separators($output, $replacement, $sep = '', $bef
  * @return void
  */
 function settagord_custom_css() {
-	$custom_separator = get_option('settagord_separator', '');
+	$custom_separator = settagord_get_separator();
 
 	if ('' === $custom_separator) {
 		return;
@@ -726,7 +768,7 @@ function settagord_is_using_block_editor() {
  * @since 1.0.0
  * @return void
  */
-add_action( 'init', function () {
+function settagord_register_post_meta() {
 	$post_types = settagord_get_post_types_with_tags();
 
 	foreach ( $post_types as $post_type ) {
@@ -740,7 +782,8 @@ add_action( 'init', function () {
 			'default'       => ''
 		] );
 	}
-} );
+}
+add_action( 'init', 'settagord_register_post_meta' );
 
 /**
  * Get post types that support tags
@@ -833,7 +876,19 @@ function settagord_order_tags( $tags, $post_id ) {
 	}
 
 	settagord_debug_log( 'Ordered ' . count( $ordered_tags ) . ' tags for post ' . $post_id );
-	return $ordered_tags;
+
+	/**
+	 * Filters the post's tags after the saved order has been applied.
+	 *
+	 * Runs for every path that renders tags, so it is the single place to
+	 * adjust ordering, limit the list, or inject terms.
+	 *
+	 * @since 1.2.0
+	 * @param array $ordered_tags Term objects in their final order.
+	 * @param int   $post_id      Post the tags belong to.
+	 * @param array $tags         Term objects as WordPress supplied them.
+	 */
+	return apply_filters( 'settagord_ordered_tags', $ordered_tags, $post_id, $tags );
 }
 
 /**
@@ -901,11 +956,10 @@ function settagord_the_ordered_post_tags($before = '', $sep = '', $after = '', $
 		return;
 	}
 
-	// Get separator from settings or use provided parameter
-	$separator = get_option('settagord_separator');
-	if ($separator === '' && $sep !== '') {
-		$separator = $sep;
-	}
+	// The configured separator wins over the caller's. Only it is escaped and
+	// wrapped: $sep belongs to the theme and is frequently markup, such as
+	// '</li><li>', which escaping would turn into visible text.
+	$custom_separator = settagord_get_separator();
 
 	// Get class
 	$class = get_option('settagord_class', 'tag');
@@ -913,10 +967,10 @@ function settagord_the_ordered_post_tags($before = '', $sep = '', $after = '', $
 	$html = $before;
 
 	foreach ($tags as $index => $tag) {
-		if ($index > 0 && !empty($separator)) {
-			$html .= '<span class="settagord-tag-separator">' . esc_html($separator) . '</span>';
-		} elseif ($index > 0) {
-			$html .= $sep; // Use default separator if custom is empty
+		if ($index > 0) {
+			$html .= ('' !== $custom_separator)
+				? '<span class="settagord-tag-separator">' . esc_html($custom_separator) . '</span>'
+				: $sep;
 		}
 
 		$html .= sprintf(
@@ -959,7 +1013,7 @@ function settagord_ajax_set_editor_mode() {
 	
 	// Verify nonce with proper sanitization
 	if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'settagord_editor_mode')) {
-		wp_send_json_error('Invalid nonce');
+		wp_send_json_error( __( 'Invalid nonce', 'set-tag-order' ) );
 	}
 
 	if (isset($_POST['mode']) && $_POST['mode'] === 'classic') {
@@ -985,23 +1039,13 @@ add_action('wp_ajax_settagord_editor_mode', 'settagord_ajax_set_editor_mode');
  * @return void
  */
 function settagord_render_custom_tag_box($post) {
-	$all_tags = get_tags(['hide_empty' => false]);
+	// get_the_tags() runs through the get_the_terms filter, which this plugin
+	// uses to apply the saved order, so the list arrives already sorted. The
+	// partial previously re-fetched it and discarded a usort done here.
 	$post_tags = get_the_tags($post->ID) ?: [];
 	$tag_order = settagord_get_tag_order_meta($post->ID);
-	$ordered_ids = $tag_order ? explode(',', $tag_order) : [];
-
-    // Sort post tags according to the saved order
-    if (!empty($ordered_ids) && !empty($post_tags)) {
-        $ordered_tags_map = array_flip($ordered_ids);
-        usort($post_tags, function ($a, $b) use ($ordered_tags_map) {
-            $pos_a = isset($ordered_tags_map[$a->term_id]) ? $ordered_tags_map[$a->term_id] : PHP_INT_MAX;
-            $pos_b = isset($ordered_tags_map[$b->term_id]) ? $ordered_tags_map[$b->term_id] : PHP_INT_MAX;
-            return $pos_a <=> $pos_b;
-        });
-    }
 
 	// Include the partial template file
-	// Pass necessary variables to the partial's scope
 	include plugin_dir_path(__FILE__) . 'partials/custom-tag-box-partial.php';
 }
 
@@ -1039,7 +1083,7 @@ function settagord_add_meta_box() {
 		// Then add the custom one
 		add_meta_box(
 			'settagord_meta_box',
-			'Tags', // Use standard name for familiarity
+			__( 'Tags', 'set-tag-order' ), // Use standard name for familiarity
 			'settagord_render_custom_tag_box',
 			$post_type,
 			'side',
@@ -1129,17 +1173,17 @@ add_action('save_post', function($post_id) {
 add_action('wp_ajax_settagord_add_tag', function() {
 	// Verify nonce with proper sanitization
 	if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'settagord_add_tag_nonce')) {
-		wp_send_json_error('Invalid nonce');
+		wp_send_json_error( __( 'Invalid nonce', 'set-tag-order' ) );
 	}
 
 	$taxonomy = get_taxonomy('post_tag');
 	if (!$taxonomy || !current_user_can($taxonomy->cap->edit_terms)) {
-		wp_send_json_error('You are not allowed to create tags.');
+		wp_send_json_error( __( 'You are not allowed to create tags.', 'set-tag-order' ) );
 	}
 
 	// Validate and sanitize tag name
 	if (!isset($_POST['tag_name']) || empty($_POST['tag_name'])) {
-		wp_send_json_error('Tag name is required');
+		wp_send_json_error( __( 'Tag name is required', 'set-tag-order' ) );
 	}
 
 	$tag_name = sanitize_text_field(wp_unslash($_POST['tag_name']));
@@ -1151,7 +1195,7 @@ add_action('wp_ajax_settagord_add_tag', function() {
 		// Get the complete term object to ensure we have the correct data
 		$term = get_term($tag['term_id'], 'post_tag');
 		if (is_wp_error($term)) {
-			wp_send_json_error('Error retrieving newly created tag.');
+			wp_send_json_error( __( 'Error retrieving newly created tag.', 'set-tag-order' ) );
 		} else {
 			wp_send_json_success([
 				'term_id' => $term->term_id,
@@ -1172,7 +1216,7 @@ function settagord_register_assets() {
 	wp_register_script(
 		'settagord-script',
 		plugins_url('/assets/js/set-tag-order.js', __FILE__),
-		['wp-plugins', 'wp-editor', 'wp-element', 'wp-components', 'wp-data', 'wp-i18n'],
+		['wp-plugins', 'wp-editor', 'wp-element', 'wp-components', 'wp-data', 'wp-i18n', 'wp-a11y'],
 		SETTAGORD_VERSION,
 		[
 			'in_footer' => true,
@@ -1294,7 +1338,7 @@ add_action('admin_enqueue_scripts', function($hook) {
     wp_enqueue_script(
         'settagord-admin-js', 
         plugin_dir_url(__FILE__) . 'js/set-tag-order-admin.js', 
-        ['jquery', 'jquery-ui-sortable', 'wp-util'], // Add dependencies
+        ['jquery', 'jquery-ui-sortable', 'wp-util', 'wp-a11y'], // wp-a11y powers the screen reader announcements
         SETTAGORD_VERSION, // Versioning
         true // Load in footer
     );
@@ -1305,11 +1349,37 @@ add_action('admin_enqueue_scripts', function($hook) {
         return ['id' => $tag->term_id, 'text' => $tag->name];
     }, $all_tags);
 
-	// Pass data to the script
+	// Pass data to the script. Strings are localized here rather than through
+	// wp_set_script_translations() so that translations work from a plain .mo
+	// file, without needing generated JSON translation files.
 	wp_localize_script('settagord-admin-js', 'settagordAdminData', [
-		'allTags' => $tags_for_js,
-		'ajaxurl' => admin_url('admin-ajax.php'),
-		'addTagNonce' => wp_create_nonce('settagord_add_tag_nonce') // Added nonce for add tag AJAX
+		'allTags'     => $tags_for_js,
+		'ajaxurl'     => admin_url('admin-ajax.php'),
+		'addTagNonce' => wp_create_nonce('settagord_add_tag_nonce'),
+		'i18n'        => [
+			/* translators: %s: tag name */
+			'moveUp'       => __('Move %s up', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'moveDown'     => __('Move %s down', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'remove'       => __('Remove %s', 'set-tag-order'),
+			/* translators: 1: tag name, 2: new position, 3: total number of tags */
+			'movedTo'      => __('%1$s moved to position %2$s of %3$s', 'set-tag-order'),
+			'alreadyFirst' => __('Already first', 'set-tag-order'),
+			'alreadyLast'  => __('Already last', 'set-tag-order'),
+			'orderUpdated' => __('Tag order updated', 'set-tag-order'),
+			'sortedAlpha'  => __('Tags sorted alphabetically', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'tagAdded'     => __('%s added', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'tagRemoved'   => __('%s removed', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'alreadyAdded' => __('%s is already added', 'set-tag-order'),
+			/* translators: %s: error message */
+			'addError'     => __('Error adding tag: %s', 'set-tag-order'),
+			'unknownError' => __('Unknown error', 'set-tag-order'),
+			'ajaxError'    => __('Could not reach the server to add the tag.', 'set-tag-order'),
+		],
 	]);
 
 }, 20); // Change priority from default 10 to 20

@@ -44,6 +44,20 @@ No meaningfully. The ordering is an in-memory sort of a post's tags on data Word
 
 No. A tag archive lists posts for a single tag, so there is no per-post order to apply.
 
+## What happens if I delete the plugin?
+
+Deleting it from the Plugins screen removes its three settings, the tag order stored on every post, and the editor-detection value stored per user. On multisite this runs for every site in the network.
+
+Deactivating removes nothing, so deactivating and reactivating never loses a saved order.
+
+## Can I change the order without a mouse?
+
+Yes. Both editors give every tag up and down arrow buttons, which are fully keyboard operable, and changes are announced to screen readers. Before 1.2.0 the Classic Editor box was drag-only.
+
+## Is it translation ready?
+
+Yes. A translation template ships in the plugin's `languages/` folder, and all interface text is translatable.
+
 ## Is there a debug mode?
 
 Yes. Enable it under **Settings → Set Tag Order** to log diagnostic information, then disable it once you are done. See [Troubleshooting](troubleshooting.md) for where the log is written.
