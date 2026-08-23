@@ -26,6 +26,18 @@ After installation, you can access the settings under Settings > Set Tag Order.
 
 ## Changelog
 
+### 1.2.0
+* Add WordPress 7.1 compatibility, including the always-iframed editor and the jQuery UI 1.14.2 update.
+* Stop replacing the `core/post-terms` block renderer. Tag order and CSS classes are now applied before the block renders, so the block keeps its own wrapper markup, alignment, link colour, block supports, and prefix and suffix text.
+* Apply custom tag CSS classes without rebuilding the link, preserving `rel="tag"` and attributes added by other plugins.
+* Fix tag order synchronization when loading a post in the Classic Editor, which never ran because it required a nonce WordPress does not issue.
+* Replace the custom tag separator only between tags, no longer inside tag names or URLs.
+* Load the separator stylesheet from a plugin-owned handle so it still applies on themes that do not load the core block styles.
+* Reduce front-end overhead: debug logging no longer formats messages when debug mode is off, and the supported post type lookup is cached per request.
+* Add accessible labels to the Block Editor reorder buttons and translate the panel strings.
+* Raise the minimum WordPress version to 6.3, which the plugin already required in practice.
+* Remove a REST API filter that could never run, and an unused separator filter for a hook that does not exist in WordPress.
+
 ### 1.1.3
 * Add Classic Editor support for creating new tags from the custom tag box.
 * Improve tag order synchronization when tags are added or removed.
