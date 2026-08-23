@@ -5,13 +5,8 @@ on:
     branches:
       - main
       - master
-    paths:
-      - '**'
-      - '.github/workflows/tests.yml'
+      - develop
   pull_request:
-    paths:
-      - '**'
-      - '.github/workflows/tests.yml'
 
 concurrency:
   group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -34,7 +29,12 @@ jobs:
           - php: '8.3'
             wordpress: '7.0'
           - php: '8.3'
+            wordpress: '7.1'
+          - php: '8.4'
+            wordpress: '7.1'
+          - php: '8.3'
             wordpress: 'latest'
+            coverage: 'xdebug'
 
     services:
       mysql:
@@ -57,13 +57,13 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: dom, curl, libxml, mbstring, zip, mysqli
-          coverage: none
+          coverage: ${{ matrix.coverage || 'none' }}
           tools: composer:v2
 
       - name: Install test suite prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y subversion default-mysql-client
+          sudo apt-get install -y subversion
 
       - name: Get Composer cache directory
         id: composer-cache
@@ -73,21 +73,67 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
+          key: ${{ runner.os }}-composer-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-${{ matrix.php }}-
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist
 
+      # The WordPress test suite is installed inline so that a clean checkout of
+      # this repository can run the full suite. Release and local-development
+      # tooling is intentionally not published, so this workflow must not depend
+      # on it. The database itself is created by the mysql service container.
       - name: Install WordPress test suite
-        run: |
-          bash bin/install-wp-tests.sh wordpress_test settagorder settagorder 127.0.0.1:3306 ${{ matrix.wordpress }} true
         env:
-          WP_TESTS_DIR: ${{ env.WP_TESTS_DIR }}
-          WP_CORE_DIR: ${{ env.WP_CORE_DIR }}
+          WP_VERSION: ${{ matrix.wordpress }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${WP_VERSION}" == "latest" ]]; then
+            curl -fLsS https://api.wordpress.org/core/version-check/1.7/ -o /tmp/wp-version.json
+            RESOLVED="$(grep -o '"version":"[^"]*' /tmp/wp-version.json | sed 's/"version":"//' | head -1)"
+            ARCHIVE="latest"
+          else
+            curl -fLsS "https://api.wordpress.org/core/version-check/1.7/?version=${WP_VERSION}" -o /tmp/wp-version.json
+            RESOLVED="$(grep -o '"version":"[^"]*' /tmp/wp-version.json | sed 's/"version":"//' \
+              | grep -E "^${WP_VERSION}(\.|$)" | head -1)"
+            ARCHIVE="wordpress-${RESOLVED:-$WP_VERSION}"
+          fi
+
+          if [[ -z "${RESOLVED}" ]]; then
+            echo "Could not resolve a WordPress version for '${WP_VERSION}'." >&2
+            exit 1
+          fi
+
+          # A trailing .0 is dropped from WordPress SVN tags (7.1.0 is tagged 7.1).
+          TESTS_TAG="tags/${RESOLVED%.0}"
+          echo "WordPress ${RESOLVED} (test suite: ${TESTS_TAG})"
+
+          mkdir -p "${WP_CORE_DIR}"
+          curl -fLsS "https://wordpress.org/${ARCHIVE}.tar.gz" -o /tmp/wordpress.tar.gz
+          tar --strip-components=1 -zxmf /tmp/wordpress.tar.gz -C "${WP_CORE_DIR}"
+
+          mkdir -p "${WP_TESTS_DIR}"
+          svn export --quiet --ignore-externals \
+            "https://develop.svn.wordpress.org/${TESTS_TAG}/tests/phpunit/includes/" "${WP_TESTS_DIR}/includes"
+          svn export --quiet --ignore-externals \
+            "https://develop.svn.wordpress.org/${TESTS_TAG}/tests/phpunit/data/" "${WP_TESTS_DIR}/data"
+
+          curl -fLsS "https://develop.svn.wordpress.org/${TESTS_TAG}/wp-tests-config-sample.php" \
+            -o "${WP_TESTS_DIR}/wp-tests-config.php"
+
+          sed -i "s:dirname( __FILE__ ) . '/src/':'${WP_CORE_DIR}/':" "${WP_TESTS_DIR}/wp-tests-config.php"
+          sed -i "s:__DIR__ . '/src/':'${WP_CORE_DIR}/':" "${WP_TESTS_DIR}/wp-tests-config.php"
+          sed -i "s/youremptytestdbnamehere/wordpress_test/" "${WP_TESTS_DIR}/wp-tests-config.php"
+          sed -i "s/yourusernamehere/settagorder/" "${WP_TESTS_DIR}/wp-tests-config.php"
+          sed -i "s/yourpasswordhere/settagorder/" "${WP_TESTS_DIR}/wp-tests-config.php"
+          sed -i "s|localhost|127.0.0.1:3306|" "${WP_TESTS_DIR}/wp-tests-config.php"
 
       - name: Run integration tests
         run: composer test
-        env:
-          WP_TESTS_DIR: ${{ env.WP_TESTS_DIR }}
-          WP_CORE_DIR: ${{ env.WP_CORE_DIR }}
+
+      # Coverage runs on a single matrix entry: Xdebug roughly doubles the
+      # runtime, and the number is the same on every PHP version.
+      - name: Report code coverage
+        if: matrix.coverage == 'xdebug'
+        run: composer test:coverage

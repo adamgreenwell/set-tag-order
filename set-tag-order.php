@@ -3,8 +3,8 @@
  * Plugin Name: Set Tag Order
  * Plugin URI: https://github.com/adamgreenwell/set-tag-order
  * Description: Allows setting custom order for post tags in the block editor
- * Version:     1.1.3
- * Requires at least: 5.2
+ * Version:     1.2.0
+ * Requires at least: 6.3
  * Requires PHP: 7.4
  * Author: Adam Greenwell
  * Author URI: https://adamgreenwell.com
@@ -19,6 +19,31 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Plugin version, used to version enqueued assets.
+ *
+ * Asset versions were previously derived from filemtime(), which stats the
+ * filesystem on every page load, emits a warning if a file is missing, and
+ * produces a different cache-busting value on every install.
+ *
+ * @since 1.2.0
+ */
+if ( ! defined( 'SETTAGORD_VERSION' ) ) {
+	define( 'SETTAGORD_VERSION', '1.2.0' );
+}
+
+/**
+ * Absolute path to the main plugin file.
+ *
+ * Needed by inc/admin/settings.php, where __FILE__ refers to the include
+ * rather than the plugin, to build the plugin_action_links_ hook name.
+ *
+ * @since 1.2.0
+ */
+if ( ! defined( 'SETTAGORD_PLUGIN_FILE' ) ) {
+	define( 'SETTAGORD_PLUGIN_FILE', __FILE__ );
+}
+
+/**
  * Plugin debugging function
  *
  * Logs debug messages when debug mode is enabled
@@ -28,9 +53,23 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return void
  */
 function settagord_debug_log( $message ) {
-	if ( get_option( 'settagord_debug_mode', false ) ) {
+	if ( settagord_debug_enabled() ) {
 		error_log( '[Set Tag Order Debug] ' . $message );
 	}
+}
+
+/**
+ * Whether debug logging is enabled.
+ *
+ * Callers on hot paths should check this before building a log message, so
+ * that string formatting only happens when the message will actually be
+ * written. The option itself is autoloaded, so this is a cache lookup.
+ *
+ * @since 1.2.0
+ * @return bool True when debug mode is on.
+ */
+function settagord_debug_enabled() {
+	return (bool) get_option( 'settagord_debug_mode', false );
 }
 
 /**
@@ -85,20 +124,30 @@ function settagord_delete_tag_order_meta( $post_id ) {
 }
 
 /**
- * Hook to synchronize tag order when post is loaded in editor
+ * Hook to synchronize tag order when post is loaded in the Classic Editor
+ *
+ * This previously required a 'load-post' nonce, which WordPress core never
+ * issues for post.php, so the synchronization never ran. A nonce is also the
+ * wrong control here: this is not a user-submitted action but an idempotent
+ * normalization of stored order against the post's current tags. The edit
+ * capability is the meaningful check.
  *
  * @since 1.0.4
  */
 add_action('load-post.php', function() {
-	// Verify nonce for post loading
-	if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'load-post')) {
+	// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading the post ID from the admin edit screen URL; access is gated on the edit_post capability below.
+	if (!isset($_GET['post'])) {
 		return;
 	}
 
-	if (isset($_GET['post'])) {
-		$post_id = intval($_GET['post']);
-		settagord_synchronize_on_load($post_id);
+	// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- See above.
+	$post_id = absint($_GET['post']);
+
+	if (!$post_id || !current_user_can('edit_post', $post_id)) {
+		return;
 	}
+
+	settagord_synchronize_on_load($post_id);
 });
 
 /**
@@ -118,7 +167,7 @@ add_filter('rest_prepare_post', function($response, $post, $request) {
 
 	if (!empty($post->ID) && $request->get_method() === 'GET') {
 		// Only process for individual post requests with an edit context
-		if ($request->get_param('context') === 'edit') {
+		if ($request->get_param('context') === 'edit' && current_user_can('edit_post', $post->ID)) {
 			settagord_synchronize_on_load($post->ID);
 		}
 	}
@@ -180,7 +229,14 @@ add_filter('get_terms', function($terms, $taxonomies, $args) {
 }, 10, 3);
 
 /**
- * Apply custom CSS class to tag links
+ * Apply the custom CSS class to tag links.
+ *
+ * Ordering is deliberately not handled here. get_the_term_list() builds its
+ * link array by iterating the terms returned from get_the_terms(), which this
+ * plugin has already ordered, so the links arrive in the correct order. This
+ * filter only needs to add the configured class, and it does so by editing the
+ * existing anchor rather than rebuilding it - which preserves rel="tag" and any
+ * attributes contributed by other plugins.
  *
  * @since 1.0.3
  * @param array $links Array of tag link HTML
@@ -188,253 +244,192 @@ add_filter('get_terms', function($terms, $taxonomies, $args) {
  */
 add_filter('term_links-post_tag', function($links) {
 	// Only apply in frontend
-	if (is_admin()) {
+	if (is_admin() || empty($links) || !is_array($links)) {
 		return $links;
 	}
 
-	$post_id = get_the_ID();
-	if (!$post_id) {
+	$classes = settagord_get_custom_link_classes();
+	if (empty($classes)) {
 		return $links;
 	}
 
-	// Check if this post type supports tags
-	$post_type = get_post_type($post_id);
-	if (!in_array($post_type, settagord_get_post_types_with_tags())) {
-		return $links;
-	}
-
-	// Get the ordered tags
-	$tags = settagord_get_ordered_post_tags($post_id);
-	if (!$tags) {
-		return $links;
-	}
-
-	// Get settings
-	$separator = get_option('settagord_separator', '');
-	$custom_class = get_option('settagord_class', 'tag');
-
-	// Check if we need to apply our custom format
-	if (empty($separator) && $custom_class === 'tag') {
-		// Just maintain the order without changing format
-		$ordered_links = array();
-		foreach ($tags as $tag) {
-			$link = get_term_link($tag, 'post_tag');
-			if (!is_wp_error($link)) {
-				$ordered_links[] = '<a href="' . esc_url($link) . '" rel="tag">' . esc_html($tag->name) . '</a>';
-			}
-		}
-		return $ordered_links;
-	}
-
-	// Get the existing links to preserve classes and other attributes
-	$existing_links_by_tag = array();
-	foreach ($links as $link) {
-		// Extract tag name from link
-		if (preg_match('/>([^<]+)<\/a>/', $link, $matches)) {
-			$tag_name = trim($matches[1]);
-			$existing_links_by_tag[$tag_name] = $link;
-		}
-	}
-
-	// Apply custom format with our separator and class, preserving other attributes
-	$custom_links = array();
-	foreach ($tags as $tag) {
-		$tag_name = $tag->name;
-
-		// Check if we have an existing link for this tag
-		if (isset($existing_links_by_tag[$tag_name])) {
-			$existing_link = $existing_links_by_tag[$tag_name];
-
-			// If we need to add our custom class
-			if ($custom_class !== 'tag') {
-				// If link already has a class attribute, add our class to it
-				if (preg_match('/class=(["\'])([^"\']+)\\1/', $existing_link, $class_matches)) {
-					$existing_classes = $class_matches[2];
-					$updated_classes = $existing_classes;
-
-					// Only add our class if it's not already there
-					if (strpos($existing_classes, $custom_class) === false) {
-						$updated_classes = $existing_classes . ' ' . $custom_class;
-					}
-
-					$existing_link = str_replace(
-						'class=' . $class_matches[1] . $existing_classes . $class_matches[1],
-						'class=' . $class_matches[1] . $updated_classes . $class_matches[1],
-						$existing_link
-					);
-				} else {
-					// No existing class, add ours
-					$existing_link = str_replace('<a ', '<a class="' . esc_attr($custom_class) . '" ', $existing_link);
-				}
-
-			}
-
-			$custom_links[] = $existing_link;
-		} else {
-			// Create a new link with our class
-			$link = get_term_link($tag, 'post_tag');
-			if (!is_wp_error($link)) {
-				$custom_links[] = '<a href="' . esc_url($link) . '" class="' . esc_attr($custom_class) . '">' . esc_html($tag->name) . '</a>';
-			}
-		}
-	}
-
-	return $custom_links;
+	return array_map('settagord_add_classes_to_link', $links);
 }, 20, 1);
 
 /**
- * Filter Block Editor tag separator
+ * Get the configured tag link classes as an array.
  *
- * @since 1.0.5
- * @param string $separator The separator text
- * @return string Modified separator text
+ * Returns an empty array for the historical default of 'tag', which core
+ * already omits from the markup.
+ *
+ * @since 1.2.0
+ * @return array List of class names to add.
  */
-function settagord_filter_block_separator($separator) {
-	$custom_separator = get_option('settagord_separator', '');
+function settagord_get_custom_link_classes() {
+	$custom_class = trim( (string) get_option( 'settagord_class', 'tag' ) );
 
-	settagord_debug_log("Filter wp_block_post_terms_separator called - Separator: '$separator', Custom: '$custom_separator'");
+	$classes = ( '' === $custom_class || 'tag' === $custom_class )
+		? array()
+		: array_values( array_filter( array_map( 'trim', explode( ' ', $custom_class ) ) ) );
 
-	// Only modify if we have a custom separator
-	if (!empty($custom_separator)) {
-		return $custom_separator;
-	}
-	return $separator;
+	/**
+	 * Filters the CSS classes added to each tag link.
+	 *
+	 * Returning an empty array leaves the link markup untouched, which is the
+	 * default and matches WordPress core.
+	 *
+	 * @since 1.2.0
+	 * @param array $classes Class names to add.
+	 */
+	return (array) apply_filters( 'settagord_link_classes', $classes );
 }
-add_filter('wp_block_post_terms_separator', 'settagord_filter_block_separator', 10, 1);
 
 /**
- * Filter Block Editor post-terms block output
+ * Get the configured tag separator.
+ *
+ * @since 1.2.0
+ * @return string Separator text, or an empty string when none is configured.
+ */
+function settagord_get_separator() {
+	$separator = (string) get_option( 'settagord_separator', '' );
+
+	/**
+	 * Filters the separator placed between tags.
+	 *
+	 * An empty string means "leave the theme's own separator alone", so
+	 * returning '' here disables separator handling entirely.
+	 *
+	 * @since 1.2.0
+	 * @param string $separator Configured separator.
+	 */
+	return (string) apply_filters( 'settagord_separator', $separator );
+}
+
+/**
+ * Add the configured CSS classes to a single anchor without rebuilding it.
+ *
+ * @since 1.2.0
+ * @param string $link Anchor HTML.
+ * @return string Anchor HTML with the custom classes applied.
+ */
+function settagord_add_classes_to_link($link) {
+	$classes = settagord_get_custom_link_classes();
+
+	if (empty($classes) || !is_string($link) || '' === $link) {
+		return $link;
+	}
+
+	$processor = new WP_HTML_Tag_Processor($link);
+
+	if (!$processor->next_tag('a')) {
+		return $link;
+	}
+
+	foreach ($classes as $class) {
+		$processor->add_class($class);
+	}
+
+	return $processor->get_updated_html();
+}
+
+/**
+ * Apply the custom separator to the core/post-terms block.
+ *
+ * core/post-terms renders its separator inline from the block attribute and
+ * exposes no filter for it, so rewriting the rendered separator spans is the
+ * only way to honour the plugin setting.
+ *
+ * Everything else is left to core. Term order comes from the get_the_terms
+ * filter and the custom class from term_links-post_tag, both of which run
+ * before the block renders, so core's own renderer produces correctly ordered
+ * and classed output. Leaving it in place keeps the wrapper that
+ * get_block_wrapper_attributes() builds - block supports, alignment, link
+ * colour, and the prefix and suffix spans - which a hand-rolled renderer
+ * would silently discard.
  *
  * @since 1.0.6
  * @param string        $block_content The block content
  * @param array         $parsed_block  The full block, including name and attributes
- * @param WP_Block|null $instance      The block instance, unavailable before WordPress 5.9
+ * @param WP_Block|null $instance      The block instance, unused
  * @return string Modified block content
  */
 function settagord_filter_post_terms_block($block_content, $parsed_block, $instance = null) {
-    // Only process post-terms blocks
-    if (empty($parsed_block['blockName']) || $parsed_block['blockName'] !== 'core/post-terms') {
-        return $block_content;
-    }
+	// Only process post-terms blocks
+	if (empty($parsed_block['blockName']) || $parsed_block['blockName'] !== 'core/post-terms') {
+		return $block_content;
+	}
 
-    // Only process if this is for the post_tag taxonomy
-    $term_type = isset($parsed_block['attrs']['term']) ? $parsed_block['attrs']['term'] : 'post_tag';
-    if ($term_type !== 'post_tag') {
-        return $block_content;
-    }
+	// Only process if this is for the post_tag taxonomy
+	$term_type = isset($parsed_block['attrs']['term']) ? $parsed_block['attrs']['term'] : 'post_tag';
+	if ($term_type !== 'post_tag' || !is_string($block_content) || '' === $block_content) {
+		return $block_content;
+	}
 
-    // Get block attributes
-    $attributes = isset($parsed_block['attrs']) ? $parsed_block['attrs'] : array();
+	$custom_separator = settagord_get_separator();
+	if ('' === $custom_separator) {
+		return $block_content;
+	}
 
-    // Call our custom renderer with the correct parameters
-    $custom_content = settagord_render_post_terms_block($attributes, $block_content, $instance);
+	settagord_debug_log('Applying custom separator to core/post-terms output');
 
-    return $custom_content;
+	return preg_replace_callback(
+		'#(<span class="wp-block-post-terms__separator">)(.*?)(</span>)#s',
+		function ($matches) use ($custom_separator) {
+			return $matches[1] . esc_html($custom_separator) . $matches[3];
+		},
+		$block_content
+	);
 }
 add_filter('render_block', 'settagord_filter_post_terms_block', 10, 3);
 
 /**
- * Custom renderer for post-terms block
+ * Log term ordering results when debug mode is enabled.
  *
- * @param array         $attributes Block attributes.
- * @param string        $content    Existing block content.
- * @param WP_Block|null $block      Block instance, unavailable before WordPress 5.9.
- * @return string Rendered block content.
- */
-function settagord_render_post_terms_block($attributes, $content, $block = null) {
-    $post_id = isset($block->context['postId']) ? $block->context['postId'] : 0;
-    if (!$post_id) {
-        global $post;
-        $post_id = $post ? $post->ID : 0;
-    }
-    
-    $term_type = isset($attributes['term']) ? $attributes['term'] : 'post_tag';
-    settagord_debug_log("Custom post-terms renderer called for post $post_id with term type $term_type");
-    
-    if ($term_type !== 'post_tag') {
-        // If not rendering tags, let WordPress handle it
-        return $content;
-    }
-    
-    // Get our ordered tags using our existing function
-    $tags = settagord_get_ordered_post_tags($post_id);
-    
-    if (!$tags || empty($tags)) {
-        settagord_debug_log("No tags found for post $post_id in custom renderer");
-        return $content; // Return original content if no tags
-    }
-    
-    $tag_count = count($tags);
-    settagord_debug_log("Custom renderer found $tag_count tags for post $post_id");
-    
-    // Get separator and class settings
-    $separator = get_option('settagord_separator', '');
-    if (empty($separator) && isset($attributes['separator'])) {
-        $separator = $attributes['separator'];
-    }
-    
-    // Get custom classes - parse into array to prevent duplication
-    $custom_class = get_option('settagord_class', 'tag');
-    $custom_classes = explode(' ', $custom_class);
-    $custom_classes = array_map('trim', $custom_classes);
-    $custom_classes = array_filter($custom_classes);
-    
-    // Start building output
-    $classes = 'taxonomy-post_tag wp-block-post-terms';
-    if (!empty($attributes['className'])) {
-        $classes .= ' ' . $attributes['className'];
-    }
-    
-    $html = '<div class="' . esc_attr($classes) . '">';
-    
-    foreach ($tags as $index => $tag) {
-        if ($index > 0 && !empty($separator)) {
-            $html .= '<span class="wp-block-post-terms__separator">' . esc_html($separator) . '</span>';
-        }
-        
-        $tag_link = get_term_link($tag, 'post_tag');
-        if (!is_wp_error($tag_link)) {
-            $html .= '<a href="' . esc_url($tag_link) . '" class="' . esc_attr(implode(' ', $custom_classes)) . '" rel="tag">' . 
-                     esc_html($tag->name) . '</a>';
-        }
-    }
-    
-    $html .= '</div>';
-    settagord_debug_log("Custom renderer generated HTML for tags");
-    
-    return $html;
-}
-
-/**
- * Add debug filter to track get_the_terms
- * 
+ * This filter runs on every get_the_terms() call, so the log message is only
+ * assembled once debug mode is confirmed on. Building it unconditionally cost
+ * an array_map and an implode on every request for output nobody reads.
+ *
  * @since 1.0.6
+ * @param array|WP_Error $terms    Array of term objects
+ * @param int            $post_id  Post ID
+ * @param string         $taxonomy Taxonomy name
+ * @return array|WP_Error Unmodified terms
  */
 function settagord_debug_get_the_terms($terms, $post_id, $taxonomy) {
-	if ($taxonomy === 'post_tag') {
-		settagord_debug_log("get_the_terms filter for post $post_id with taxonomy $taxonomy returned " . 
-			(is_array($terms) ? count($terms) : 'non-array') . " terms");
-		
-		if (is_array($terms) && !empty($terms)) {
-			$term_names = array_map(function($term) { 
-				return $term->name; 
-			}, $terms);
-			settagord_debug_log("Terms: " . implode(', ', $term_names));
-		} else {
-			settagord_debug_log("No terms found or terms is not an array");
-		}
+	if ($taxonomy !== 'post_tag' || !settagord_debug_enabled()) {
+		return $terms;
 	}
+
+	settagord_debug_log("get_the_terms filter for post $post_id with taxonomy $taxonomy returned " .
+		(is_array($terms) ? count($terms) : 'non-array') . " terms");
+
+	if (is_array($terms) && !empty($terms)) {
+		settagord_debug_log('Terms: ' . implode(', ', wp_list_pluck($terms, 'name')));
+	} else {
+		settagord_debug_log('No terms found or terms is not an array');
+	}
+
 	return $terms;
 }
 add_filter('get_the_terms', 'settagord_debug_get_the_terms', 999, 3);
 
 /**
- * Add debug filter for post-terms block attributes
+ * Log post-terms block attributes when debug mode is enabled.
+ *
+ * @since 1.0.6
+ * @param string|null $pre_render   Pre-rendered content, always returned unchanged
+ * @param array       $parsed_block The parsed block
+ * @return string|null Unmodified pre-render value
  */
 function settagord_debug_pre_render_block($pre_render, $parsed_block) {
-	if (!empty($parsed_block['blockName']) && $parsed_block['blockName'] === 'core/post-terms') {
-		settagord_debug_log("Pre-render for post-terms block: " . json_encode($parsed_block['attrs']));
+	if (!settagord_debug_enabled()) {
+		return $pre_render;
 	}
+
+	if (!empty($parsed_block['blockName']) && $parsed_block['blockName'] === 'core/post-terms') {
+		settagord_debug_log('Pre-render for post-terms block: ' . wp_json_encode($parsed_block['attrs']));
+	}
+
 	return $pre_render;
 }
 add_filter('pre_render_block', 'settagord_debug_pre_render_block', 10, 2);
@@ -450,65 +445,125 @@ add_filter('pre_render_block', 'settagord_debug_pre_render_block', 10, 2);
  * @return string Modified HTML output
  */
 function settagord_filter_the_tags($output, $before, $sep, $after) {
-	$custom_separator = get_option('settagord_separator', '');
+	$custom_separator = settagord_get_separator();
+
+	if ('' === $custom_separator || !is_string($output) || '' === $output) {
+		return $output;
+	}
 
 	settagord_debug_log("Filter the_tags called - Default separator: '$sep', Custom: '$custom_separator'");
 
-	// Only modify if we have a custom separator
-	if (!empty($custom_separator) && !empty($output)) {
-		// Store original for debugging
-		$original_output = $output;
-		
-		// Classic Editor handling
-		$first_tag_pos = strpos($output, '</a>') + 4;
-		$next_tag_pos = strpos($output, '<a', $first_tag_pos);
+	$replacement = '<span class="settagord-tag-separator">' . esc_html($custom_separator) . '</span>';
 
-		if ($next_tag_pos !== false) {
-			// Find the actual separator used
-			$actual_separator = substr($output, $first_tag_pos, $next_tag_pos - $first_tag_pos);
-			$actual_separator = trim($actual_separator);
-			
-			settagord_debug_log("Actual separator found: '$actual_separator'");
-			
-			// Replace the actual separator with our custom one
-			$output = str_replace(
-				$actual_separator,
-				'<span class="settagord-tag-separator">' . esc_html($custom_separator) . '</span>',
-				$output
-			);
-			
-			// Log whether the replacement was successful
-			if ($original_output !== $output) {
-				settagord_debug_log("Custom separator applied to the_tags output");
-			} else {
-				settagord_debug_log("Warning: Failed to replace separator in the_tags output");
-			}
-		}
-	}
-
-	return $output;
+	return settagord_replace_tag_separators($output, $replacement, $sep, $before, $after);
 }
 add_filter('the_tags', 'settagord_filter_the_tags', 10, 4);
 
 /**
+ * Replace the separators that sit between tag anchors in the_tags() output.
+ *
+ * the_tags() hands us finished HTML built by get_the_term_list() as
+ * $before . implode( $sep, $links ) . $after. We need to swap the joining text
+ * for the configured separator without touching anything inside the anchors
+ * themselves - hrefs and tag names can contain the same characters the
+ * separator is made of.
+ *
+ * Because the filter is given $sep, $before, and $after, none of that has to be
+ * inferred from the markup. The previous implementation sampled the text
+ * between the first two anchors and ran str_replace() for it across the whole
+ * string, so a separator of ", " also rewrote a comma inside a tag name or URL.
+ *
+ * Two things keep the replacement contained:
+ *
+ * 1. $before and $after are sliced off first. They are caller-supplied markup
+ *    that may legitimately contain both anchors and separator characters, and
+ *    they are handed back untouched.
+ * 2. The separator is only matched where implode() can have put it - directly
+ *    between a closing and an opening anchor. A separator occurring anywhere
+ *    else is, by construction, part of a tag name or an attribute.
+ *
+ * If the markup does not match - because another plugin filtering
+ * term_links-post_tag wrapped each link in extra elements, for instance - the
+ * output is returned unchanged. Leaving the theme separator in place is the
+ * right failure mode; a looser match risks corrupting the tag text.
+ *
+ * @since 1.2.0
+ * @param string $output      Rendered tag list HTML.
+ * @param string $replacement Separator markup to insert between anchors.
+ * @param string $sep         Separator get_the_term_list() joined the links with.
+ * @param string $before      Markup prepended by the caller.
+ * @param string $after       Markup appended by the caller.
+ * @return string Output with separators replaced.
+ */
+function settagord_replace_tag_separators($output, $replacement, $sep = '', $before = '', $after = '') {
+	$prefix = '';
+	$suffix = '';
+
+	if ('' !== $before && 0 === strpos($output, $before)) {
+		$prefix = $before;
+		$output = substr($output, strlen($before));
+	}
+
+	if ('' !== $after && strlen($output) >= strlen($after) && substr($output, -strlen($after)) === $after) {
+		$suffix = $after;
+		$output = substr($output, 0, -strlen($after));
+	}
+
+	// \b keeps <a> from matching <article> and friends.
+	$pattern = '#</a>' . preg_quote($sep, '#') . '<a\b#';
+
+	// A callback rather than a replacement string: the separator is arbitrary
+	// user input, and esc_html() does not neutralise the "$" and backslash that
+	// preg_replace() would read as backreferences.
+	$replaced = preg_replace_callback(
+		$pattern,
+		function () use ($replacement) {
+			return '</a>' . $replacement . '<a';
+		},
+		$output
+	);
+
+	if (null === $replaced) {
+		settagord_debug_log('Separator replacement failed; returning the_tags output unchanged');
+
+		return $prefix . $output . $suffix;
+	}
+
+	return $prefix . $replaced . $suffix;
+}
+
+/**
  * Add custom CSS for tag separators
+ *
+ * The style is attached to a stylesheet handle owned by this plugin rather
+ * than to wp-block-library. Attaching to a core handle means the CSS is
+ * silently dropped whenever that handle is not enqueued, which is the case on
+ * classic themes and on any site that disables the core block styles.
  *
  * @since 1.0.5
  * @return void
  */
 function settagord_custom_css() {
-	$custom_separator = get_option('settagord_separator', '');
-	if (!empty($custom_separator)) {
-		$custom_css = '
-			.settagord-tag-separator {
-				display: inline-block;
-				margin: 0 0.25em;
-				font-size: 1.2em;
-				color: #999;
-			}
-		';
-		wp_add_inline_style('wp-block-library', $custom_css);
+	$custom_separator = settagord_get_separator();
+
+	if ('' === $custom_separator) {
+		return;
 	}
+
+	$custom_css = '
+		.settagord-tag-separator {
+			display: inline-block;
+			margin: 0 0.25em;
+			font-size: 1.2em;
+			color: #999;
+		}
+	';
+
+	// An empty registered stylesheet gives wp_add_inline_style() a handle that
+	// is guaranteed to be present, without shipping an extra HTTP request.
+	wp_register_style('settagord-inline', false, [], SETTAGORD_VERSION);
+	wp_enqueue_style('settagord-inline');
+	wp_add_inline_style('settagord-inline', $custom_css);
 }
 add_action('wp_enqueue_scripts', 'settagord_custom_css');
 
@@ -713,7 +768,7 @@ function settagord_is_using_block_editor() {
  * @since 1.0.0
  * @return void
  */
-add_action( 'init', function () {
+function settagord_register_post_meta() {
 	$post_types = settagord_get_post_types_with_tags();
 
 	foreach ( $post_types as $post_type ) {
@@ -727,7 +782,8 @@ add_action( 'init', function () {
 			'default'       => ''
 		] );
 	}
-} );
+}
+add_action( 'init', 'settagord_register_post_meta' );
 
 /**
  * Get post types that support tags
@@ -737,18 +793,44 @@ add_action( 'init', function () {
  * @since 1.0.0
  * @return array Array of post type names
  */
-function settagord_get_post_types_with_tags() {
-	$post_types      = get_post_types( [ 'public' => true ], 'objects' );
-	$supported_types = [];
+function settagord_get_post_types_with_tags( $refresh = false ) {
+	static $supported_types = null;
 
-	foreach ( $post_types as $post_type ) {
-		if ( is_object_in_taxonomy( $post_type->name, 'post_tag' ) ) {
-			$supported_types[] = $post_type->name;
+	if ( $refresh || null === $supported_types ) {
+		$post_types      = get_post_types( [ 'public' => true ], 'objects' );
+		$supported_types = [];
+
+		foreach ( $post_types as $post_type ) {
+			if ( is_object_in_taxonomy( $post_type->name, 'post_tag' ) ) {
+				$supported_types[] = $post_type->name;
+			}
 		}
 	}
 
 	return $supported_types;
 }
+
+/**
+ * Rebuild the cached post type list.
+ *
+ * settagord_get_post_types_with_tags() is called from the get_the_terms
+ * filter, which runs many times per request, so its result is memoized. Post
+ * type and taxonomy registration can change after the first call, so the cache
+ * is rebuilt whenever either is touched.
+ *
+ * @since 1.2.0
+ * @return void
+ */
+function settagord_flush_post_type_cache() {
+	settagord_get_post_types_with_tags( true );
+}
+add_action( 'registered_post_type', 'settagord_flush_post_type_cache' );
+add_action( 'unregistered_post_type', 'settagord_flush_post_type_cache' );
+add_action( 'registered_taxonomy', 'settagord_flush_post_type_cache' );
+add_action( 'unregistered_taxonomy', 'settagord_flush_post_type_cache' );
+add_action( 'registered_taxonomy_for_object_type', 'settagord_flush_post_type_cache' );
+add_action( 'unregistered_taxonomy_for_object_type', 'settagord_flush_post_type_cache' );
+
 
 /**
  * Order tags based on saved meta
@@ -794,7 +876,19 @@ function settagord_order_tags( $tags, $post_id ) {
 	}
 
 	settagord_debug_log( 'Ordered ' . count( $ordered_tags ) . ' tags for post ' . $post_id );
-	return $ordered_tags;
+
+	/**
+	 * Filters the post's tags after the saved order has been applied.
+	 *
+	 * Runs for every path that renders tags, so it is the single place to
+	 * adjust ordering, limit the list, or inject terms.
+	 *
+	 * @since 1.2.0
+	 * @param array $ordered_tags Term objects in their final order.
+	 * @param int   $post_id      Post the tags belong to.
+	 * @param array $tags         Term objects as WordPress supplied them.
+	 */
+	return apply_filters( 'settagord_ordered_tags', $ordered_tags, $post_id, $tags );
 }
 
 /**
@@ -862,11 +956,10 @@ function settagord_the_ordered_post_tags($before = '', $sep = '', $after = '', $
 		return;
 	}
 
-	// Get separator from settings or use provided parameter
-	$separator = get_option('settagord_separator');
-	if ($separator === '' && $sep !== '') {
-		$separator = $sep;
-	}
+	// The configured separator wins over the caller's. Only it is escaped and
+	// wrapped: $sep belongs to the theme and is frequently markup, such as
+	// '</li><li>', which escaping would turn into visible text.
+	$custom_separator = settagord_get_separator();
 
 	// Get class
 	$class = get_option('settagord_class', 'tag');
@@ -874,10 +967,10 @@ function settagord_the_ordered_post_tags($before = '', $sep = '', $after = '', $
 	$html = $before;
 
 	foreach ($tags as $index => $tag) {
-		if ($index > 0 && !empty($separator)) {
-			$html .= '<span class="settagord-tag-separator">' . esc_html($separator) . '</span>';
-		} elseif ($index > 0) {
-			$html .= $sep; // Use default separator if custom is empty
+		if ($index > 0) {
+			$html .= ('' !== $custom_separator)
+				? '<span class="settagord-tag-separator">' . esc_html($custom_separator) . '</span>'
+				: $sep;
 		}
 
 		$html .= sprintf(
@@ -920,7 +1013,7 @@ function settagord_ajax_set_editor_mode() {
 	
 	// Verify nonce with proper sanitization
 	if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'settagord_editor_mode')) {
-		wp_send_json_error('Invalid nonce');
+		wp_send_json_error( __( 'Invalid nonce', 'set-tag-order' ) );
 	}
 
 	if (isset($_POST['mode']) && $_POST['mode'] === 'classic') {
@@ -946,23 +1039,13 @@ add_action('wp_ajax_settagord_editor_mode', 'settagord_ajax_set_editor_mode');
  * @return void
  */
 function settagord_render_custom_tag_box($post) {
-	$all_tags = get_tags(['hide_empty' => false]);
+	// get_the_tags() runs through the get_the_terms filter, which this plugin
+	// uses to apply the saved order, so the list arrives already sorted. The
+	// partial previously re-fetched it and discarded a usort done here.
 	$post_tags = get_the_tags($post->ID) ?: [];
 	$tag_order = settagord_get_tag_order_meta($post->ID);
-	$ordered_ids = $tag_order ? explode(',', $tag_order) : [];
-
-    // Sort post tags according to the saved order
-    if (!empty($ordered_ids) && !empty($post_tags)) {
-        $ordered_tags_map = array_flip($ordered_ids);
-        usort($post_tags, function ($a, $b) use ($ordered_tags_map) {
-            $pos_a = isset($ordered_tags_map[$a->term_id]) ? $ordered_tags_map[$a->term_id] : PHP_INT_MAX;
-            $pos_b = isset($ordered_tags_map[$b->term_id]) ? $ordered_tags_map[$b->term_id] : PHP_INT_MAX;
-            return $pos_a <=> $pos_b;
-        });
-    }
 
 	// Include the partial template file
-	// Pass necessary variables to the partial's scope
 	include plugin_dir_path(__FILE__) . 'partials/custom-tag-box-partial.php';
 }
 
@@ -1000,7 +1083,7 @@ function settagord_add_meta_box() {
 		// Then add the custom one
 		add_meta_box(
 			'settagord_meta_box',
-			'Tags', // Use standard name for familiarity
+			__( 'Tags', 'set-tag-order' ), // Use standard name for familiarity
 			'settagord_render_custom_tag_box',
 			$post_type,
 			'side',
@@ -1012,79 +1095,20 @@ function settagord_add_meta_box() {
 add_action('add_meta_boxes', 'settagord_add_meta_box', 100);
 
 /**
- * Sync tag operations between Block Editor and custom tag order
+ * Tag order synchronization for Block Editor (REST API) saves.
  *
- * @since 1.0.4
- * @return void
- */
-function settagord_add_rest_filter() {
-	// Only hook into post types that support tags
-	$post_types = settagord_get_post_types_with_tags();
-	foreach ($post_types as $post_type) {
-		add_filter("rest_pre_insert_{$post_type}", 'settagord_sync_tag_order_on_rest_update', 10, 2);
-	}
-}
-add_action('rest_api_init', 'settagord_add_rest_filter');
-
-/**
- * Synchronize tag order when post is updated via REST API (Block Editor)
+ * This used to run on rest_pre_insert_{$post_type} and read
+ * $prepared_post->tags. WP_REST_Posts_Controller::prepare_item_for_database()
+ * never puts taxonomy terms on the prepared post - they are applied separately
+ * by handle_terms() after the post is inserted - so that filter could not see
+ * tags and never did anything.
  *
- * @since 1.0.4
- * @param stdClass        $prepared_post The prepared post data for updating
- * @param WP_REST_Request $request       The current request object
- * @return stdClass The modified post data
+ * handle_terms() calls wp_set_object_terms(), which fires set_object_terms.
+ * The set_object_terms handler above already covers REST saves, so no
+ * additional REST hook is needed.
+ *
+ * @since 1.2.0
  */
-function settagord_sync_tag_order_on_rest_update($prepared_post, $request) {
-	// Check if we have post ID and tags in the request
-	if (!isset($prepared_post->ID) || !isset($prepared_post->tags)) {
-		return $prepared_post;
-	}
-
-	$post_id = $prepared_post->ID;
-	$new_tags = $prepared_post->tags;
-	settagord_debug_log("REST API update for post {$post_id} with tags: " . implode(',', $new_tags));
-
-	// Get current tag order
-	$current_order = settagord_get_tag_order_meta($post_id);
-	$ordered_ids = !empty($current_order) ? explode(',', $current_order) : [];
-
-	// Nothing to do if no new tags and no existing order
-	if (empty($new_tags) && empty($ordered_ids)) {
-		return $prepared_post;
-	}
-
-	// If removing all tags, clear the order
-	if (empty($new_tags)) {
-		settagord_delete_tag_order_meta($post_id);
-		settagord_debug_log("REST API: Cleared tag order for post {$post_id} (all tags removed)");
-		return $prepared_post;
-	}
-
-	// Create new order preserving the sequence of existing order
-	$new_order = [];
-
-	// First add tags that are in the existing order
-	if (!empty($ordered_ids)) {
-		foreach ($ordered_ids as $id) {
-			if (in_array($id, $new_tags)) {
-				$new_order[] = $id;
-			}
-		}
-	}
-
-	// Then add any new tags that weren't in the existing order
-	foreach ($new_tags as $id) {
-		if (!in_array($id, $new_order)) {
-			$new_order[] = $id;
-		}
-	}
-
-	// Update the tag order meta
-	settagord_update_tag_order_meta($post_id, implode(',', $new_order));
-	settagord_debug_log("REST API: Updated tag order for post {$post_id}: " . implode(',', $new_order));
-
-	return $prepared_post;
-}
 
 /**
  * Save meta box data
@@ -1149,17 +1173,17 @@ add_action('save_post', function($post_id) {
 add_action('wp_ajax_settagord_add_tag', function() {
 	// Verify nonce with proper sanitization
 	if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'settagord_add_tag_nonce')) {
-		wp_send_json_error('Invalid nonce');
+		wp_send_json_error( __( 'Invalid nonce', 'set-tag-order' ) );
 	}
 
 	$taxonomy = get_taxonomy('post_tag');
 	if (!$taxonomy || !current_user_can($taxonomy->cap->edit_terms)) {
-		wp_send_json_error('You are not allowed to create tags.');
+		wp_send_json_error( __( 'You are not allowed to create tags.', 'set-tag-order' ) );
 	}
 
 	// Validate and sanitize tag name
 	if (!isset($_POST['tag_name']) || empty($_POST['tag_name'])) {
-		wp_send_json_error('Tag name is required');
+		wp_send_json_error( __( 'Tag name is required', 'set-tag-order' ) );
 	}
 
 	$tag_name = sanitize_text_field(wp_unslash($_POST['tag_name']));
@@ -1171,7 +1195,7 @@ add_action('wp_ajax_settagord_add_tag', function() {
 		// Get the complete term object to ensure we have the correct data
 		$term = get_term($tag['term_id'], 'post_tag');
 		if (is_wp_error($term)) {
-			wp_send_json_error('Error retrieving newly created tag.');
+			wp_send_json_error( __( 'Error retrieving newly created tag.', 'set-tag-order' ) );
 		} else {
 			wp_send_json_success([
 				'term_id' => $term->term_id,
@@ -1192,8 +1216,8 @@ function settagord_register_assets() {
 	wp_register_script(
 		'settagord-script',
 		plugins_url('/assets/js/set-tag-order.js', __FILE__),
-		['wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data', 'wp-i18n'],
-		filemtime(plugin_dir_path(__FILE__) . 'assets/js/set-tag-order.js'),
+		['wp-plugins', 'wp-editor', 'wp-element', 'wp-components', 'wp-data', 'wp-i18n', 'wp-a11y'],
+		SETTAGORD_VERSION,
 		[
 			'in_footer' => true,
 			'strategy' => 'defer'
@@ -1205,7 +1229,7 @@ function settagord_register_assets() {
 		'settagord-panel-styles',
 		plugins_url('/assets/css/tag-order-panels.css', __FILE__),
 		[],
-		filemtime(plugin_dir_path(__FILE__) . 'assets/css/tag-order-panels.css')
+		SETTAGORD_VERSION
 	);
 }
 add_action('init', 'settagord_register_assets');
@@ -1252,7 +1276,7 @@ add_action('admin_enqueue_scripts', function($hook) {
         $editor_detect_handle,
         plugin_dir_url(__FILE__) . 'js/admin-editor-detect.js',
         [], // No dependencies needed for this simple script
-        filemtime(plugin_dir_path(__FILE__) . 'js/admin-editor-detect.js'),
+        SETTAGORD_VERSION,
         true // Load in footer
     );
 
@@ -1307,15 +1331,15 @@ add_action('admin_enqueue_scripts', function($hook) {
         'settagord-admin-css', 
         plugin_dir_url(__FILE__) . 'css/set-tag-order-admin.css', 
         [], 
-        filemtime(plugin_dir_path(__FILE__) . 'css/set-tag-order-admin.css') // Versioning
+        SETTAGORD_VERSION // Versioning
     );
 
     // Enqueue JS
     wp_enqueue_script(
         'settagord-admin-js', 
         plugin_dir_url(__FILE__) . 'js/set-tag-order-admin.js', 
-        ['jquery', 'jquery-ui-sortable', 'wp-util'], // Add dependencies
-        filemtime(plugin_dir_path(__FILE__) . 'js/set-tag-order-admin.js'), // Versioning
+        ['jquery', 'jquery-ui-sortable', 'wp-util', 'wp-a11y'], // wp-a11y powers the screen reader announcements
+        SETTAGORD_VERSION, // Versioning
         true // Load in footer
     );
 
@@ -1325,11 +1349,37 @@ add_action('admin_enqueue_scripts', function($hook) {
         return ['id' => $tag->term_id, 'text' => $tag->name];
     }, $all_tags);
 
-	// Pass data to the script
+	// Pass data to the script. Strings are localized here rather than through
+	// wp_set_script_translations() so that translations work from a plain .mo
+	// file, without needing generated JSON translation files.
 	wp_localize_script('settagord-admin-js', 'settagordAdminData', [
-		'allTags' => $tags_for_js,
-		'ajaxurl' => admin_url('admin-ajax.php'),
-		'addTagNonce' => wp_create_nonce('settagord_add_tag_nonce') // Added nonce for add tag AJAX
+		'allTags'     => $tags_for_js,
+		'ajaxurl'     => admin_url('admin-ajax.php'),
+		'addTagNonce' => wp_create_nonce('settagord_add_tag_nonce'),
+		'i18n'        => [
+			/* translators: %s: tag name */
+			'moveUp'       => __('Move %s up', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'moveDown'     => __('Move %s down', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'remove'       => __('Remove %s', 'set-tag-order'),
+			/* translators: 1: tag name, 2: new position, 3: total number of tags */
+			'movedTo'      => __('%1$s moved to position %2$s of %3$s', 'set-tag-order'),
+			'alreadyFirst' => __('Already first', 'set-tag-order'),
+			'alreadyLast'  => __('Already last', 'set-tag-order'),
+			'orderUpdated' => __('Tag order updated', 'set-tag-order'),
+			'sortedAlpha'  => __('Tags sorted alphabetically', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'tagAdded'     => __('%s added', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'tagRemoved'   => __('%s removed', 'set-tag-order'),
+			/* translators: %s: tag name */
+			'alreadyAdded' => __('%s is already added', 'set-tag-order'),
+			/* translators: %s: error message */
+			'addError'     => __('Error adding tag: %s', 'set-tag-order'),
+			'unknownError' => __('Unknown error', 'set-tag-order'),
+			'ajaxError'    => __('Could not reach the server to add the tag.', 'set-tag-order'),
+		],
 	]);
 
 }, 20); // Change priority from default 10 to 20

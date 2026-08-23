@@ -17,11 +17,14 @@
     "yoast/phpunit-polyfills": "^2.0"
   },
   "scripts": {
-    "build": "bash bin/build-release.sh",
-    "deploy:svn": "bash bin/deploy-svn.sh",
+    "test": "vendor/bin/phpunit -c phpunit.xml",
+    "test:integration": "vendor/bin/phpunit -c phpunit.xml --testsuite integration",
+    "test:random": "vendor/bin/phpunit -c phpunit.xml --order-by=random",
+    "test:coverage": "php -d xdebug.mode=coverage vendor/bin/phpunit -c phpunit.xml --coverage-text",
+    "test:coverage-html": "php -d xdebug.mode=coverage vendor/bin/phpunit -c phpunit.xml --coverage-html coverage",
     "test:setup": "bash bin/setup-tests.sh",
-    "test": "bash bin/run-tests-from-wp-root.sh",
-    "test:integration": "bash bin/run-tests-from-wp-root.sh --testsuite integration"
+    "build": "bash bin/build-release.sh",
+    "deploy:svn": "bash bin/deploy-svn.sh"
   },
   "config": {
     "platform": {

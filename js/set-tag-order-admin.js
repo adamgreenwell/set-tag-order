@@ -1,172 +1,266 @@
 /**
  * Set Tag Order Admin JavaScript
  *
+ * Drives the Classic Editor tag box: adding and removing tags, and reordering
+ * them by drag, by keyboard, or alphabetically.
+ *
  * @package Set_Tag_Order
  */
 
-jQuery(document).ready(function($) {
+jQuery(document).ready(function ($) {
     var tagInput = $('#new-tag-input');
     var sortableList = $('#sortable-tags');
     var tagOrderInput = $('#tag-order-input');
     var postTagsInput = $('#post-tags-input');
-    var allTags = settagordAdminData.allTags || []; // Renamed prefix
+    var allTags = settagordAdminData.allTags || [];
+    var i18n = settagordAdminData.i18n || {};
 
-    // 1. Initialize Sortable
+    /**
+     * Announce a change to assistive technology.
+     *
+     * Reordering by button gives no visible focus change, so without this a
+     * screen reader user gets no feedback that anything happened.
+     */
+    function announce(message) {
+        if (window.wp && wp.a11y && wp.a11y.speak) {
+            wp.a11y.speak(message, 'polite');
+        }
+    }
+
+    /**
+     * Fill placeholders in a localized string.
+     *
+     * Supports both "%s" and the numbered "%1$s" form, which translators need
+     * whenever a string has more than one placeholder and word order varies
+     * between languages.
+     */
+    function format(template) {
+        var values = Array.prototype.slice.call(arguments, 1);
+        var index = 0;
+
+        return String(template || '').replace(/%(?:(\d+)\$)?s/g, function (match, position) {
+            var value = position ? values[parseInt(position, 10) - 1] : values[index++];
+            return typeof value === 'undefined' ? match : String(value);
+        });
+    }
+
+    function escapeHtml(text) {
+        var map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+        return String(text).replace(/[&<>"']/g, function (m) {
+            return map[m];
+        });
+    }
+
+    // --- Sorting -----------------------------------------------------------
+
     if (sortableList.length > 0) {
         sortableList.sortable({
-            update: function(event, ui) {
+            update: function () {
                 updateTagOrder();
+                announce(i18n.orderUpdated);
             }
         });
     } else {
         console.error('Set Tag Order Admin JS: Sortable list #sortable-tags not found!');
     }
 
-    // 2. Initialize Tag Autocomplete/Input Logic
-    // Use a library like Select2 or jQuery UI Autocomplete if available
-    // For simplicity, this uses a basic datalist approach if no advanced library is enqueued.
-    // If you have Select2 or similar enqueued, initialize it here.
+    /**
+     * Move a tag one position up or down.
+     *
+     * Drag-and-drop is mouse and touch only, so these buttons are the sole
+     * keyboard route to reordering. Focus is deliberately kept on the button
+     * after the move so a run of presses works without re-tabbing.
+     */
+    function moveTag($button, direction) {
+        var $item = $button.closest('li');
+        var $swapWith = direction === 'up' ? $item.prev('li') : $item.next('li');
 
-    // Simple Autocomplete (using datalist for basic suggestion)
+        if (!$swapWith.length) {
+            announce(direction === 'up' ? i18n.alreadyFirst : i18n.alreadyLast);
+            return;
+        }
+
+        if (direction === 'up') {
+            $item.insertBefore($swapWith);
+        } else {
+            $item.insertAfter($swapWith);
+        }
+
+        updateTagOrder();
+
+        // The element moved in the DOM, so the button lost focus. Put it back
+        // on the equivalent button in its new position.
+        $item.find('.settagord-move[data-direction="' + direction + '"]').trigger('focus');
+
+        announce(format(
+            i18n.movedTo,
+            $item.data('tag-name'),
+            $item.index() + 1,
+            sortableList.children('li').length
+        ));
+    }
+
+    sortableList.on('click', '.settagord-move', function (event) {
+        event.preventDefault();
+        moveTag($(this), $(this).data('direction'));
+    });
+
+    $('.settagord-sort-alpha').on('click', function (event) {
+        event.preventDefault();
+
+        var items = sortableList.children('li').get();
+
+        items.sort(function (a, b) {
+            return String($(a).data('tag-name')).localeCompare(String($(b).data('tag-name')), undefined, {sensitivity: 'base'});
+        });
+
+        sortableList.append(items);
+        updateTagOrder();
+        announce(i18n.sortedAlpha);
+    });
+
+    // --- Adding tags -------------------------------------------------------
+
     var dataListId = 'existing-tags-list';
     if ($('#' + dataListId).length === 0) {
         $('<datalist />').attr('id', dataListId).appendTo('body');
     }
     var dataList = $('#' + dataListId);
-    dataList.empty(); // Clear previous options
-    allTags.forEach(function(tag) {
+    dataList.empty();
+    allTags.forEach(function (tag) {
         $('<option />').val(tag.text).appendTo(dataList);
     });
     tagInput.attr('list', dataListId);
 
-
-    // 3. Add Tag Button Click
-    $('.tagadd').click(function() {
+    function addTag() {
         var tagName = tagInput.val().trim();
-        if (!tagName) return;
+        if (!tagName) {
+            return;
+        }
 
-        // Check if tag already added to the post
         var alreadyAdded = false;
-        sortableList.find('li').each(function() {
-            if ($(this).data('tag-name').toLowerCase() === tagName.toLowerCase()) {
+        sortableList.find('li').each(function () {
+            if (String($(this).data('tag-name')).toLowerCase() === tagName.toLowerCase()) {
                 alreadyAdded = true;
-                return false; // break loop
+                return false;
             }
         });
 
         if (alreadyAdded) {
-            tagInput.val(''); // Clear input
-            // Maybe provide user feedback (e.g., shake the existing tag)
+            tagInput.val('');
+            announce(format(i18n.alreadyAdded, tagName));
             return;
         }
 
-        // Find existing tag from allTags list
-        var existingTag = allTags.find(function(tag) {
+        var existingTag = allTags.find(function (tag) {
             return tag.text.toLowerCase() === tagName.toLowerCase();
         });
 
-	        if (existingTag) {
-	            addTagToList(existingTag.id, existingTag.text);
-	            updateTagOrder(); // Update hidden inputs
-	            tagInput.val(''); // Clear input
-	        } else {
-	            $.ajax({
-	                url: settagordAdminData.ajaxurl,
-	                type: 'POST',
-	                data: {
-	                    action: 'settagord_add_tag',
-	                    tag_name: tagName,
-                    _wpnonce: settagordAdminData.addTagNonce
-                },
-	                success: function(response) {
-	                    if (response.success) {
-	                        allTags.push({id: response.data.term_id, text: response.data.name});
-	                        $('<option />').val(response.data.name).appendTo(dataList);
-	                        addTagToList(response.data.term_id, response.data.name);
-	                        updateTagOrder();
-	                        tagInput.val('');
-	                    } else {
-	                        alert('Error adding tag: ' + (response.data || 'Unknown error'));
-	                    }
-	                },
-	                error: function() {
-	                    alert('AJAX error trying to add tag.');
-	                }
-	            });
-	        }
-	    });
-
-    // 4. Remove Tag Button Click (using event delegation)
-    if (sortableList.length > 0) {
-        sortableList.on('click', '.ntdelbutton', function() {
-            $(this).closest('li').remove();
+        if (existingTag) {
+            addTagToList(existingTag.id, existingTag.text);
             updateTagOrder();
+            tagInput.val('');
+            announce(format(i18n.tagAdded, existingTag.text));
+            return;
+        }
+
+        $.ajax({
+            url: settagordAdminData.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'settagord_add_tag',
+                tag_name: tagName,
+                _wpnonce: settagordAdminData.addTagNonce
+            },
+            success: function (response) {
+                if (response.success) {
+                    allTags.push({id: response.data.term_id, text: response.data.name});
+                    $('<option />').val(response.data.name).appendTo(dataList);
+                    addTagToList(response.data.term_id, response.data.name);
+                    updateTagOrder();
+                    tagInput.val('');
+                    announce(format(i18n.tagAdded, response.data.name));
+                } else {
+                    window.alert(format(i18n.addError, response.data || i18n.unknownError));
+                }
+            },
+            error: function () {
+                window.alert(i18n.ajaxError);
+            }
         });
-    } else {
-        console.warn('Set Tag Order Admin JS: Could not attach remove handler, sortable list not found.');
     }
 
-    // 5. Function to add a tag item to the sortable list
-    function addTagToList(tagId, tagName, isNew) {
-        // Prevent adding duplicates visually
-        var alreadyExists = false;
-        sortableList.find('li').each(function() {
+    $('.tagadd').on('click', addTag);
+
+    // Enter in the tag field should add the tag, not submit the post.
+    tagInput.on('keydown', function (event) {
+        if (event.key === 'Enter' || event.keyCode === 13) {
+            event.preventDefault();
+            addTag();
+        }
+    });
+
+    function addTagToList(tagId, tagName) {
+        var exists = false;
+        sortableList.find('li').each(function () {
             if ($(this).data('tag-id') === tagId && tagId !== null) {
-                alreadyExists = true;
-                return false;
-            } // Check by name only if it's a new tag (no ID yet)
-            else if (isNew && $(this).data('tag-name').toLowerCase() === tagName.toLowerCase()) {
-                alreadyExists = true;
+                exists = true;
                 return false;
             }
         });
 
-        if (!alreadyExists) {
-            var liClass = isNew ? 'new-tag-item' : ''; // Optional class for styling new tags
-            var tagIdAttr = tagId ? ' data-tag-id="' + tagId + '"' : ''; // Only add data-tag-id if it exists
-
-            var listItem = '<li' + tagIdAttr + ' data-tag-name="' + escapeHtml(tagName) + '" class="' + liClass + '">' +
-                           escapeHtml(tagName) +
-                           ' <button type="button" class="ntdelbutton" data-tag-id="' + (tagId || 'temp-' + Date.now()) + '">' + // Use temp ID if new
-                           '  <span class="remove-tag-icon" aria-hidden="true"></span>' +
-                           '  <span class="screen-reader-text">Remove ' + escapeHtml(tagName) + '</span>' + // Add screen reader text
-                           ' </button>' +
-                           '</li>';
-            sortableList.append(listItem);
+        if (exists) {
+            return;
         }
+
+        var safeName = escapeHtml(tagName);
+        var listItem =
+            '<li data-tag-id="' + tagId + '" data-tag-name="' + safeName + '">' +
+            '<span class="settagord-tag-name">' + safeName + '</span>' +
+            '<span class="settagord-tag-actions">' +
+            '<button type="button" class="settagord-move" data-direction="up">' +
+            '<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>' +
+            '<span class="screen-reader-text">' + escapeHtml(format(i18n.moveUp, tagName)) + '</span>' +
+            '</button>' +
+            '<button type="button" class="settagord-move" data-direction="down">' +
+            '<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>' +
+            '<span class="screen-reader-text">' + escapeHtml(format(i18n.moveDown, tagName)) + '</span>' +
+            '</button>' +
+            '<button type="button" class="ntdelbutton" data-tag-id="' + tagId + '">' +
+            '<span class="remove-tag-icon" aria-hidden="true"></span>' +
+            '<span class="screen-reader-text">' + escapeHtml(format(i18n.remove, tagName)) + '</span>' +
+            '</button>' +
+            '</span>' +
+            '</li>';
+
+        sortableList.append(listItem);
     }
 
-    // 6. Function to update the hidden input fields
+    // --- Removing tags -----------------------------------------------------
+
+    sortableList.on('click', '.ntdelbutton', function () {
+        var $item = $(this).closest('li');
+        var name = $item.data('tag-name');
+
+        $item.remove();
+        updateTagOrder();
+        announce(format(i18n.tagRemoved, name));
+    });
+
+    // --- Persisting --------------------------------------------------------
+
     function updateTagOrder() {
-	        var orderedIds = [];
-	        var currentTagIds = []; // All tags currently in the list
-	        sortableList.find('li').each(function() {
-	            var tagId = $(this).data('tag-id');
-	            var numericTagId = parseInt(tagId, 10);
+        var orderedIds = [];
 
-	            if (!isNaN(numericTagId)) {
-	                orderedIds.push(numericTagId);
-	                currentTagIds.push(numericTagId);
-	            }
-	        });
+        sortableList.find('li').each(function () {
+            var tagId = parseInt($(this).data('tag-id'), 10);
+
+            if (!isNaN(tagId)) {
+                orderedIds.push(tagId);
+            }
+        });
+
         tagOrderInput.val(orderedIds.join(','));
-        postTagsInput.val(currentTagIds.join(',')); // Update this with *all* present tags
+        postTagsInput.val(orderedIds.join(','));
     }
-
-    // 7. Helper function to escape HTML (basic version)
-    function escapeHtml(text) {
-        var map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-    }
-
-    // Initial setup: Ensure the sortable list reflects the initial tag order
-    // The PHP partial should render the list items correctly based on $post_tags.
-    // We just need to ensure the hidden input reflects this initial state if needed.
-    // updateTagOrder(); // Call once on load to set initial values
 });

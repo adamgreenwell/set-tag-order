@@ -1,74 +1,150 @@
+/**
+ * Set Tag Order - Classic Editor tag box.
+ *
+ * Colours are declared as custom properties with light-scheme defaults and
+ * overridden under prefers-color-scheme: dark. WordPress admin does not expose
+ * a full token set, so the values are local; --wp-admin-theme-color is used
+ * where core does provide one, so focus rings follow the user's admin colour
+ * scheme.
+ */
+
+.settagord-tagsdiv {
+    --settagord-item-bg: #f0f0f1;
+    --settagord-item-bg-hover: #e5e5e5;
+    --settagord-item-border: #dcdcde;
+    --settagord-text: #2c3338;
+    --settagord-text-muted: #646970;
+    --settagord-danger: #b32d2e;
+    --settagord-danger-hover: #d63638;
+    --settagord-focus: var(--wp-admin-theme-color, #2271b1);
+}
+
+@media (prefers-color-scheme: dark) {
+    .settagord-tagsdiv {
+        --settagord-item-bg: #2c3338;
+        --settagord-item-bg-hover: #3c434a;
+        --settagord-item-border: #4f5a65;
+        --settagord-text: #f0f0f1;
+        --settagord-text-muted: #c3c4c7;
+        --settagord-danger: #f86368;
+        --settagord-danger-hover: #ff8085;
+    }
+}
+
 .jaxtag {
     margin-top: 15px;
 }
+
 .tagchecklist {
     margin-left: 0;
     margin-top: 15px;
 }
+
 .tag-list {
     margin: 0;
     padding: 0;
 }
+
 .tag-list li {
-    padding: 8px 8px 8px 30px;
-    margin: 4px 0;
-    background: #f0f0f0;
-    border: 1px solid #ddd;
-    cursor: move;
-    list-style: none;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 6px 8px;
+    margin: 4px 0;
+    background: var(--settagord-item-bg);
+    border: 1px solid var(--settagord-item-border);
+    border-radius: 2px;
+    color: var(--settagord-text);
+    list-style: none;
     position: relative;
 }
+
+/* Only the row itself advertises dragging; the buttons are click targets. */
 .tag-list li:hover {
-    background: #e5e5e5;
+    background: var(--settagord-item-bg-hover);
 }
+
+.settagord-tag-name {
+    cursor: move;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.settagord-tag-actions {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
+.settagord-move,
 .ntdelbutton {
-    left: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
     border: none;
     background: none;
-    color: #a00;
     cursor: pointer;
-    padding: 0 4px;
-    /* Add a negative margin to visually align it better */
-    margin-right: -4px; 
+    color: var(--settagord-text-muted);
 }
-.ntdelbutton:hover {
-    color: #dc3232;
+
+.settagord-move:hover,
+.settagord-move:focus {
+    color: var(--settagord-focus);
 }
+
+.settagord-move .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 1;
+}
+
+.ntdelbutton {
+    color: var(--settagord-danger);
+}
+
+.ntdelbutton:hover,
+.ntdelbutton:focus {
+    color: var(--settagord-danger-hover);
+}
+
+/* Keyboard users need to see which control they are on. Core's admin styles
+   do not put a visible ring on bare <button> elements inside a metabox. */
+.settagord-move:focus-visible,
+.ntdelbutton:focus-visible,
+.settagord-sort-alpha:focus-visible {
+    outline: 2px solid var(--settagord-focus);
+    outline-offset: 1px;
+    border-radius: 2px;
+}
+
 .remove-tag-icon::before {
     content: "\00d7"; /* Unicode multiplication sign */
     font-size: 1.2em;
     line-height: 1;
     vertical-align: middle;
 }
+
+.settagord-help {
+    color: var(--settagord-text-muted);
+    margin: 8px 0 4px;
+}
+
+.settagord-sort-alpha {
+    padding: 0;
+}
+
 #new-tag-input {
     width: 180px;
     max-width: 100%;
 }
 
-/* Styling for Select2 */
-.select2-container--default .select2-selection--multiple {
-    border: 1px solid #ddd;
-}
-
-.select2-container--default .select2-selection--multiple .select2-selection__choice {
-    background-color: #f0f0f0;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 0 5px;
-    margin-right: 5px;
-}
-
-.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
-    color: #a00;
-    cursor: pointer;
-    float: right;
-    margin-left: 5px;
-    font-weight: bold;
-}
-
-.select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
-    color: #dc3232;
+/* While dragging, jQuery UI leaves the item in place with this class. */
+.tag-list li.ui-sortable-helper {
+    background: var(--settagord-item-bg-hover);
 }

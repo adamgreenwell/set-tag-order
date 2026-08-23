@@ -11,11 +11,24 @@
 
 (function (wp) {
     const {registerPlugin} = wp.plugins;
-    // Handle compatibility with both older and newer WordPress versions
-    const PluginDocumentSettingPanel = wp.editor.PluginDocumentSettingPanel || wp.editPost.PluginDocumentSettingPanel;
+
+    // PluginDocumentSettingPanel moved from @wordpress/edit-post to
+    // @wordpress/editor in WordPress 6.6. Prefer the current location and fall
+    // back to the deprecated one, guarding both: @wordpress/edit-post is on a
+    // deprecation path and is not guaranteed to be present.
+    const PluginDocumentSettingPanel =
+        (wp.editor && wp.editor.PluginDocumentSettingPanel) ||
+        (wp.editPost && wp.editPost.PluginDocumentSettingPanel);
+
+    if (!PluginDocumentSettingPanel) {
+        return;
+    }
+
     const {useSelect, useDispatch, subscribe} = wp.data;
     const {useState, useEffect, createElement: h} = wp.element;
     const {Button} = wp.components;
+    const {__, sprintf} = wp.i18n;
+    const speak = (wp.a11y && wp.a11y.speak) ? wp.a11y.speak : function () {};
 
     /**
      * Tag Order Panel Component
@@ -159,39 +172,72 @@
 
                 setTagOrder(newOrder);
                 editPost({meta: {...meta, _settagord: newOrder.join(',')}});
+
+                // Reordering moves a row with no visible focus change, so
+                // without this a screen reader user gets no feedback.
+                const moved = tags.find(tag => tag.id === tagId);
+                if (moved) {
+                    speak(sprintf(
+                        /* translators: 1: tag name, 2: new position, 3: total number of tags */
+                        __('%1$s moved to position %2$s of %3$s', 'set-tag-order'),
+                        moved.name,
+                        newIndex + 1,
+                        newOrder.length
+                    ), 'polite');
+                }
             }
         };
 
-        return h('div', null,
-            orderedTags.length === 0 ?
-                h('p', null, 'Add tags to customize their display order.') :
+        /**
+         * Re-sort the tags alphabetically.
+         *
+         * An escape hatch for when an order has drifted and stepping every tag
+         * back into place one arrow press at a time would be tedious.
+         */
+        const sortAlphabetically = () => {
+            const sorted = [...orderedTags]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, {sensitivity: 'base'}))
+                .map(tag => tag.id);
+
+            setTagOrder(sorted);
+            editPost({meta: {...meta, _settagord: sorted.join(',')}});
+            speak(__('Tags sorted alphabetically', 'set-tag-order'), 'polite');
+        };
+
+        if (orderedTags.length === 0) {
+            return h('p', null, __('Add tags to customize their display order.', 'set-tag-order'));
+        }
+
+        return h('div', {className: 'settagord-panel'},
+            h('ul', {className: 'settagord-panel__list'},
                 orderedTags.map((tag, index) =>
-                    h('div', {
+                    h('li', {
                             key: tag.id,
-                            style: {
-                                display: 'flex',
-                                alignItems: 'center',
-                                marginBottom: '8px',
-                                padding: '8px',
-                                backgroundColor: '#f0f0f0',
-                                borderRadius: '4px'
-                            }
+                            className: 'settagord-panel__item'
                         },
-                        h('span', null, tag.name),
-                        h('div', {style: {marginLeft: 'auto'}},
+                        h('span', {className: 'settagord-panel__name'}, tag.name),
+                        h('div', {className: 'settagord-panel__actions'},
                             index > 0 && h(Button, {
-                                isSmall: true,
+                                size: 'small',
                                 onClick: () => moveTag(tag.id, 'up'),
-                                icon: 'arrow-up-alt2'
+                                icon: 'arrow-up-alt2',
+                                label: sprintf(__('Move %s up', 'set-tag-order'), tag.name)
                             }),
                             index < orderedTags.length - 1 && h(Button, {
-                                isSmall: true,
+                                size: 'small',
                                 onClick: () => moveTag(tag.id, 'down'),
-                                icon: 'arrow-down-alt2'
+                                icon: 'arrow-down-alt2',
+                                label: sprintf(__('Move %s down', 'set-tag-order'), tag.name)
                             })
                         )
                     )
                 )
+            ),
+            orderedTags.length > 1 && h(Button, {
+                variant: 'link',
+                className: 'settagord-panel__sort',
+                onClick: sortAlphabetically
+            }, __('Sort A–Z', 'set-tag-order'))
         );
     };
 
@@ -323,7 +369,7 @@
         render: () => {
             return h(PluginDocumentSettingPanel, {
                 name: 'tag-order-panel',
-                title: 'Tag Order'
+                title: __('Tag Order', 'set-tag-order')
             }, h(TagOrderPanel));
         }
     });

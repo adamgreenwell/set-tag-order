@@ -54,6 +54,10 @@ require WP_TESTS_DIR . '/includes/bootstrap.php';
 
 require_once dirname( __DIR__ ) . '/vendor/yoast/phpunit-polyfills/phpunitpolyfills-autoload.php';
 
+// Shared test helpers. Lives outside tests/integration so PHPUnit does not try
+// to collect it as a test case.
+require_once __DIR__ . '/lib/TagOrderTestHelpers.php';
+
 if ( ! function_exists( 'settagord_get_ordered_post_tags' ) ) {
 	echo "Failed to load Set Tag Order plugin\n";
 	exit( 1 );

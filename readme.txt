@@ -1,9 +1,9 @@
 === Set Tag Order ===
 Contributors: adamgreenwell
 Tags: taxonomy, post tags, block editor, classic editor
-Requires at least: 5.2
-Tested up to: 7.0
-Stable tag: 1.1.3
+Requires at least: 6.3
+Tested up to: 7.1
+Stable tag: 1.2.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -32,6 +32,27 @@ The Set Tag Order plugin enhances the WordPress tagging system by allowing users
 After installation, you can access the settings under Settings > Set Tag Order.
 
 == Changelog ==
+
+= 1.2.0 =
+* Add WordPress 7.1 compatibility, including the always-iframed editor and the jQuery UI 1.14.2 update.
+* Stop replacing the core/post-terms block renderer. Tag order and CSS classes are now applied before the block renders, so the block keeps its own wrapper markup, alignment, link colour, block supports, and prefix and suffix text.
+* Apply custom tag CSS classes without rebuilding the link, preserving rel="tag" and attributes added by other plugins.
+* Fix tag order synchronization when loading a post in the Classic Editor, which never ran because it required a nonce WordPress does not issue.
+* Replace the custom tag separator only between tags, no longer inside tag names or URLs.
+* Load the separator stylesheet from a plugin-owned handle so it still applies on themes that do not load the core block styles.
+* Reduce front-end overhead: debug logging no longer formats messages when debug mode is off, and the supported post type lookup is cached per request.
+* Add accessible labels to the Block Editor reorder buttons and translate the panel strings.
+* Raise the minimum WordPress version to 6.3, which the plugin already required in practice.
+* Remove a REST API filter that could never run, and an unused separator filter for a hook that does not exist in WordPress.
+* Add keyboard reordering to the Classic Editor tag box. Reordering was previously drag-only, leaving no way to change tag order without a mouse.
+* Add a Sort A-Z control to both editors.
+* Announce reordering, adding, and removing to screen readers.
+* Translate the plugin. Settings, the tag box, and the editor panel were previously hardcoded English despite the plugin declaring a text domain; a translation template now ships in languages/.
+* Add a Settings link to the plugin's row on the Plugins screen.
+* Add uninstall handling so deleting the plugin removes its options and tag order metadata, across all sites on multisite.
+* Add settagord_ordered_tags, settagord_separator, and settagord_link_classes filters for theme and plugin authors.
+* Follow the editor colour scheme in both editors instead of using fixed greys.
+* Validate the Tag CSS Class setting as CSS class names rather than free text.
 
 = 1.1.3 =
 * Add Classic Editor support for creating new tags from the custom tag box.

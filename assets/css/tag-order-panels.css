@@ -68,3 +68,54 @@
     border-top-color: #f0f0f0 !important;
     margin-top: -1px !important;
 }
+/**
+ * Tag Order panel contents.
+ *
+ * These rows previously carried an inline background of #f0f0f0, which ignored
+ * the editor's colour scheme. The palette is declared here as custom properties
+ * with a dark-scheme override instead.
+ */
+.settagord-panel {
+    --settagord-row-bg: #f0f0f1;
+    --settagord-row-text: #1e1e1e;
+}
+
+@media (prefers-color-scheme: dark) {
+    .settagord-panel {
+        --settagord-row-bg: #2f2f2f;
+        --settagord-row-text: #e0e0e0;
+    }
+}
+
+.settagord-panel__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.settagord-panel__item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 8px;
+    padding: 4px 4px 4px 8px;
+    background-color: var(--settagord-row-bg);
+    color: var(--settagord-row-text);
+    border-radius: 4px;
+}
+
+.settagord-panel__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.settagord-panel__actions {
+    display: flex;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+.settagord-panel__sort {
+    margin-top: 4px;
+}
