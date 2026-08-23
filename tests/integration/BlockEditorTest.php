@@ -7,7 +7,6 @@
  * ordering, classes, and separator.
  *
  * @package SetTagOrder\Tests
- * @coversNothing
  */
 class BlockEditorTest extends WP_UnitTestCase {
 

@@ -6,7 +6,6 @@
  * its function without running the cleanup on include.
  *
  * @package SetTagOrder\Tests
- * @coversNothing
  */
 class UninstallTest extends WP_UnitTestCase {
 

@@ -3,7 +3,6 @@
  * The theme-facing template functions and their legacy aliases.
  *
  * @package SetTagOrder\Tests
- * @coversNothing
  */
 class TemplateTagsTest extends WP_UnitTestCase {
 

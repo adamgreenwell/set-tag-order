@@ -3,7 +3,6 @@
  * The filters the plugin exposes for theme and plugin authors.
  *
  * @package SetTagOrder\Tests
- * @coversNothing
  */
 class FiltersTest extends WP_UnitTestCase {
 

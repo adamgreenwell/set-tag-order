@@ -3,7 +3,6 @@
  * Tag order metadata: accessors, registration, and legacy migration.
  *
  * @package SetTagOrder\Tests
- * @coversNothing
  */
 class MetaStorageTest extends WP_UnitTestCase {
 

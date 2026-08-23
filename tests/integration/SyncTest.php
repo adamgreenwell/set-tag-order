@@ -3,7 +3,6 @@
  * Keeping the stored order in step with the post's actual tags.
  *
  * @package SetTagOrder\Tests
- * @coversNothing
  */
 class SyncTest extends WP_UnitTestCase {
 

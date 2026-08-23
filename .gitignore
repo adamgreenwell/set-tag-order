@@ -38,6 +38,7 @@ Thumbs.db
 /node_modules/
 /build/
 /dist/
+/coverage/
 /.phpunit.result.cache
 *.zip
 

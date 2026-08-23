@@ -6,7 +6,6 @@
  * is_admin() is true throughout - correct for everything asserted here.
  *
  * @package SetTagOrder\Tests
- * @coversNothing
  */
 class AdminTest extends WP_Ajax_UnitTestCase {
 

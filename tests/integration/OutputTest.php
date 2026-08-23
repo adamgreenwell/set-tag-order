@@ -3,7 +3,6 @@
  * Front-end tag output: separators, CSS classes, and the separator stylesheet.
  *
  * @package SetTagOrder\Tests
- * @coversNothing
  */
 class OutputTest extends WP_UnitTestCase {
 

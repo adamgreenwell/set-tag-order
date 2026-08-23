@@ -34,6 +34,7 @@ jobs:
             wordpress: '7.1'
           - php: '8.3'
             wordpress: 'latest'
+            coverage: 'xdebug'
 
     services:
       mysql:
@@ -56,7 +57,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: dom, curl, libxml, mbstring, zip, mysqli
-          coverage: none
+          coverage: ${{ matrix.coverage || 'none' }}
           tools: composer:v2
 
       - name: Install test suite prerequisites
@@ -130,3 +131,9 @@ jobs:
 
       - name: Run integration tests
         run: composer test
+
+      # Coverage runs on a single matrix entry: Xdebug roughly doubles the
+      # runtime, and the number is the same on every PHP version.
+      - name: Report code coverage
+        if: matrix.coverage == 'xdebug'
+        run: composer test:coverage

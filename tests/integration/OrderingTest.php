@@ -3,7 +3,6 @@
  * Core ordering behaviour and the tag order metadata.
  *
  * @package SetTagOrder\Tests
- * @coversNothing
  */
 class OrderingTest extends WP_UnitTestCase {
 
