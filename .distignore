@@ -1,39 +1,70 @@
-# Development and testing files
+# Files excluded from WordPress.org/runtime release packages.
+
+# Repository and CI files.
 /.git
 /.github
+.distignore
+.gitattributes
+.gitignore
+.gitmodules
+
+# Build and deployment output.
 /bin
 /build
 /dist
-/docs
-/tests
+/set-tag-order-svn
+*.zip
+
+# Development dependencies and tests.
+/node_modules
 /vendor
-README.md
-README.txt
-composer.json
-composer.lock
+/coverage
+/tests
 phpunit.xml
 phpunit.xml.dist
 .phpunit.result.cache
 
-# WordPress.org SVN directory
-/set-tag-order-svn
+# Development configs.
+.editorconfig
+Makefile
+composer.json
+composer.lock
+package.json
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+phpcs.xml
+phpcs.xml.dist
 
-# IDE and editor files
-/.idea
-/.vscode
+# Project-only documentation.
+# readme.txt is the WordPress.org readme and must ship; README.md is the
+# GitHub-facing copy and must not. rsync patterns are case-sensitive, so
+# "README.md" here never matches "readme.txt".
+README.md
+/docs
+
+# Local environment, editor, and OS files.
+#
+# .gitignore already excludes these, so they never reach the repository - but
+# the release build copies from the working tree, not from git. Without them
+# listed here an IDE directory ships straight into the package.
+.idea
+.idea/
+.vscode
+.vscode/
+*.iml
 *.sublime-project
 *.sublime-workspace
 .DS_Store
 Thumbs.db
-*.swp
-*.swo
-*~
-
-# Local and generated files
+.env
+.env.*
 *.log
 *.sql
 *.sqlite
-.env
-.env.*
-.gitignore
-.distignore
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+*.rej

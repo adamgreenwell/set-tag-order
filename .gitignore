@@ -1,4 +1,56 @@
+# Composer dependencies
+# composer.lock stays tracked: this repo has dev dependencies (PHPUnit,
+# polyfills) and CI keys its Composer cache on the lockfile hash.
 /vendor/
-build/
-dist/
+
+# SVN and version control artifacts
+*.svn/
+*.svn-base
+.svn/
+/set-tag-order-svn/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files and editor/sed backups
+*.tmp
+*.temp
+*.log
+*.bak
+*.orig
+*.rej
+
+# Test and build artifacts
+/node_modules/
+/build/
+/dist/
 /.phpunit.result.cache
+*.zip
+
+# Release tooling and planning notes are kept locally, not published.
+# They live in the working tree but are deliberately absent from the public
+# repository; .distignore also keeps them out of release packages.
+# CI does not depend on them - .github/workflows/tests.yml installs the
+# WordPress test suite inline so a clean clone can still run the suite.
+/bin/
+/docs/*
+
+# docs/website is the exception: it is the published documentation the
+# site's docs sync checks out of this repository. If it is not tracked,
+# sync-docs-from-plugin.mjs finds no source tree and regenerates the site
+# docs from readme.txt instead, wiping whatever was written by hand.
+!/docs/website/
