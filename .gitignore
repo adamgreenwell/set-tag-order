@@ -48,4 +48,10 @@ Thumbs.db
 # CI does not depend on them - .github/workflows/tests.yml installs the
 # WordPress test suite inline so a clean clone can still run the suite.
 /bin/
-/docs/
+/docs/*
+
+# docs/website is the exception: it is the published documentation the
+# site's docs sync checks out of this repository. If it is not tracked,
+# sync-docs-from-plugin.mjs finds no source tree and regenerates the site
+# docs from readme.txt instead, wiping whatever was written by hand.
+!/docs/website/
