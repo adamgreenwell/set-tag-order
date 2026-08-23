@@ -19,6 +19,7 @@
   "scripts": {
     "test": "vendor/bin/phpunit -c phpunit.xml",
     "test:integration": "vendor/bin/phpunit -c phpunit.xml --testsuite integration",
+    "test:random": "vendor/bin/phpunit -c phpunit.xml --order-by=random",
     "test:setup": "bash bin/setup-tests.sh",
     "build": "bash bin/build-release.sh",
     "deploy:svn": "bash bin/deploy-svn.sh"
