@@ -3,7 +3,7 @@ Contributors: adamgreenwell
 Tags: taxonomy, post tags, block editor, classic editor
 Requires at least: 6.3
 Tested up to: 7.1
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -32,6 +32,9 @@ The Set Tag Order plugin enhances the WordPress tagging system by allowing users
 After installation, you can access the settings under Settings > Set Tag Order.
 
 == Changelog ==
+
+= 1.2.1 =
+* Run the settagord_ordered_tags filter exactly once per render, and on posts that have no saved order. Callbacks previously never saw unordered posts, and ran twice on ordered ones.
 
 = 1.2.0 =
 * Add WordPress 7.1 compatibility, including the always-iframed editor and the jQuery UI 1.14.2 update.
