@@ -86,6 +86,88 @@ class FiltersTest extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'Beta', $html );
 	}
 
+	/**
+	 * settagord_order_tags() returned early when a post had no saved order, so
+	 * the filter never saw posts that predate the plugin or have not been
+	 * ordered yet - exactly the posts a "limit the list" callback cares about.
+	 */
+	public function test_ordered_tags_filter_runs_for_a_post_with_no_saved_order() {
+		list( $post_id ) = $this->create_post_with_tags( array( 'Alpha', 'Beta' ) );
+		delete_post_meta( $post_id, '_settagord' );
+
+		$seen = false;
+
+		add_filter(
+			'settagord_ordered_tags',
+			function ( $tags ) use ( &$seen ) {
+				$seen = true;
+
+				return $tags;
+			}
+		);
+
+		settagord_get_ordered_post_tags( $post_id );
+
+		$this->assertTrue( $seen, 'The filter should run even without saved order.' );
+	}
+
+	public function test_ordered_tags_filter_can_limit_a_post_with_no_saved_order() {
+		list( $post_id ) = $this->create_post_with_tags( array( 'Alpha', 'Beta', 'Gamma' ) );
+		delete_post_meta( $post_id, '_settagord' );
+
+		add_filter(
+			'settagord_ordered_tags',
+			function ( $tags ) {
+				return array_slice( $tags, 0, 1 );
+			}
+		);
+
+		$this->assertCount( 1, settagord_get_ordered_post_tags( $post_id ) );
+	}
+
+	/**
+	 * settagord_get_ordered_post_tags() called get_the_tags(), which already
+	 * runs the filter through get_the_terms, and then ordered again - so a
+	 * non-idempotent callback ran twice for one render.
+	 */
+	public function test_ordered_tags_filter_runs_exactly_once_per_call() {
+		list( $post_id, $ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta' ) );
+		$this->set_tag_order( $post_id, $ids );
+
+		$calls = 0;
+
+		add_filter(
+			'settagord_ordered_tags',
+			function ( $tags ) use ( &$calls ) {
+				++$calls;
+
+				return $tags;
+			}
+		);
+
+		settagord_get_ordered_post_tags( $post_id );
+
+		$this->assertSame( 1, $calls, 'The filter ran more than once for a single call.' );
+	}
+
+	public function test_a_non_idempotent_callback_is_applied_once() {
+		list( $post_id, $ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta', 'Gamma' ) );
+		$this->set_tag_order( $post_id, $ids );
+
+		// Reversing twice would silently give back the original order.
+		add_filter(
+			'settagord_ordered_tags',
+			function ( $tags ) {
+				return array_reverse( $tags );
+			}
+		);
+
+		$this->assertSame(
+			array( 'Gamma', 'Beta', 'Alpha' ),
+			$this->ordered_tag_names( settagord_get_ordered_post_tags( $post_id ) )
+		);
+	}
+
 	public function test_separator_filter_overrides_the_saved_option() {
 		list( $post_id, $ids ) = $this->create_post_with_tags( array( 'Alpha', 'Beta' ) );
 		$this->set_tag_order( $post_id, $ids );

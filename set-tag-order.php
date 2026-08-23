@@ -849,39 +849,44 @@ function settagord_order_tags( $tags, $post_id ) {
 	settagord_debug_log( 'Tag Order for post ' . $post_id . ': ' . $tag_order );
 
 	if ( empty( $tag_order ) ) {
-		return $tags;
-	}
-
-	// Create an associative array of tags indexed by term_id for faster lookup
-	$tags_by_id = array();
-	foreach ( $tags as $tag ) {
-		$tags_by_id[$tag->term_id] = $tag;
-	}
-
-	$order = array_map( 'intval', explode( ',', $tag_order ) );
-	$ordered_tags = array();
-
-	// First add all tags that are in the saved order
-	foreach ( $order as $tag_id ) {
-		if ( isset( $tags_by_id[$tag_id] ) ) {
-			$ordered_tags[] = $tags_by_id[$tag_id];
-			// Remove from the associative array to mark as processed
-			unset( $tags_by_id[$tag_id] );
+		// No saved order, so WordPress's own order is the result. The filter
+		// still runs: posts that predate the plugin, or have simply never been
+		// ordered, are exactly the ones a "limit the list" callback cares
+		// about, and skipping them made the hook fire inconsistently.
+		$ordered_tags = $tags;
+	} else {
+		// Create an associative array of tags indexed by term_id for faster lookup
+		$tags_by_id = array();
+		foreach ( $tags as $tag ) {
+			$tags_by_id[$tag->term_id] = $tag;
 		}
-	}
 
-	// Add any remaining unordered tags
-	foreach ( $tags_by_id as $tag ) {
-		$ordered_tags[] = $tag;
-	}
+		$order        = array_map( 'intval', explode( ',', $tag_order ) );
+		$ordered_tags = array();
 
-	settagord_debug_log( 'Ordered ' . count( $ordered_tags ) . ' tags for post ' . $post_id );
+		// First add all tags that are in the saved order
+		foreach ( $order as $tag_id ) {
+			if ( isset( $tags_by_id[$tag_id] ) ) {
+				$ordered_tags[] = $tags_by_id[$tag_id];
+				// Remove from the associative array to mark as processed
+				unset( $tags_by_id[$tag_id] );
+			}
+		}
+
+		// Add any remaining unordered tags
+		foreach ( $tags_by_id as $tag ) {
+			$ordered_tags[] = $tag;
+		}
+
+		settagord_debug_log( 'Ordered ' . count( $ordered_tags ) . ' tags for post ' . $post_id );
+	}
 
 	/**
 	 * Filters the post's tags after the saved order has been applied.
 	 *
-	 * Runs for every path that renders tags, so it is the single place to
-	 * adjust ordering, limit the list, or inject terms.
+	 * Runs once per resolution, on every path that renders tags, whether or
+	 * not the post has a saved order. It is the single place to adjust
+	 * ordering, limit the list, or inject terms.
 	 *
 	 * @since 1.2.0
 	 * @param array $ordered_tags Term objects in their final order.
@@ -912,12 +917,17 @@ function settagord_get_ordered_post_tags( $post_id = null ) {
 		return false;
 	}
 
+	// get_the_tags() runs the get_the_terms filter, which is where this plugin
+	// applies the saved order and the settagord_ordered_tags hook. Ordering
+	// again here would run the hook a second time for one call, so a
+	// non-idempotent callback would be applied twice.
 	$tags = get_the_tags( $post_id );
+
 	if ( ! $tags ) {
 		return false;
 	}
 
-	return settagord_order_tags( $tags, $post_id );
+	return $tags;
 }
 
 if ( ! function_exists( 'get_ordered_post_tags' ) ) {
