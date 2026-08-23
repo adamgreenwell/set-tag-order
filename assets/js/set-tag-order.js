@@ -11,11 +11,23 @@
 
 (function (wp) {
     const {registerPlugin} = wp.plugins;
-    // Handle compatibility with both older and newer WordPress versions
-    const PluginDocumentSettingPanel = wp.editor.PluginDocumentSettingPanel || wp.editPost.PluginDocumentSettingPanel;
+
+    // PluginDocumentSettingPanel moved from @wordpress/edit-post to
+    // @wordpress/editor in WordPress 6.6. Prefer the current location and fall
+    // back to the deprecated one, guarding both: @wordpress/edit-post is on a
+    // deprecation path and is not guaranteed to be present.
+    const PluginDocumentSettingPanel =
+        (wp.editor && wp.editor.PluginDocumentSettingPanel) ||
+        (wp.editPost && wp.editPost.PluginDocumentSettingPanel);
+
+    if (!PluginDocumentSettingPanel) {
+        return;
+    }
+
     const {useSelect, useDispatch, subscribe} = wp.data;
     const {useState, useEffect, createElement: h} = wp.element;
     const {Button} = wp.components;
+    const {__, sprintf} = wp.i18n;
 
     /**
      * Tag Order Panel Component
@@ -164,7 +176,7 @@
 
         return h('div', null,
             orderedTags.length === 0 ?
-                h('p', null, 'Add tags to customize their display order.') :
+                h('p', null, __('Add tags to customize their display order.', 'set-tag-order')) :
                 orderedTags.map((tag, index) =>
                     h('div', {
                             key: tag.id,
@@ -180,14 +192,16 @@
                         h('span', null, tag.name),
                         h('div', {style: {marginLeft: 'auto'}},
                             index > 0 && h(Button, {
-                                isSmall: true,
+                                size: 'small',
                                 onClick: () => moveTag(tag.id, 'up'),
-                                icon: 'arrow-up-alt2'
+                                icon: 'arrow-up-alt2',
+                                label: sprintf(__('Move %s up', 'set-tag-order'), tag.name)
                             }),
                             index < orderedTags.length - 1 && h(Button, {
-                                isSmall: true,
+                                size: 'small',
                                 onClick: () => moveTag(tag.id, 'down'),
-                                icon: 'arrow-down-alt2'
+                                icon: 'arrow-down-alt2',
+                                label: sprintf(__('Move %s down', 'set-tag-order'), tag.name)
                             })
                         )
                     )
@@ -323,7 +337,7 @@
         render: () => {
             return h(PluginDocumentSettingPanel, {
                 name: 'tag-order-panel',
-                title: 'Tag Order'
+                title: __('Tag Order', 'set-tag-order')
             }, h(TagOrderPanel));
         }
     });

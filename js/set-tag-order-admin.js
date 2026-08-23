@@ -41,7 +41,7 @@ jQuery(document).ready(function($) {
 
 
     // 3. Add Tag Button Click
-    $('.tagadd').click(function() {
+    $('.tagadd').on('click', function() {
         var tagName = tagInput.val().trim();
         if (!tagName) return;
 
