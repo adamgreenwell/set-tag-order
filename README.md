@@ -26,6 +26,9 @@ After installation, you can access the settings under Settings > Set Tag Order.
 
 ## Changelog
 
+### 1.2.1
+* Run the `settagord_ordered_tags` filter exactly once per render, and on posts that have no saved order. Callbacks previously never saw unordered posts, and ran twice on ordered ones.
+
 ### 1.2.0
 * Add WordPress 7.1 compatibility, including the always-iframed editor and the jQuery UI 1.14.2 update.
 * Stop replacing the `core/post-terms` block renderer. Tag order and CSS classes are now applied before the block renders, so the block keeps its own wrapper markup, alignment, link colour, block supports, and prefix and suffix text.
